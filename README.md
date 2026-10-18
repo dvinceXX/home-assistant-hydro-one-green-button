@@ -10,6 +10,7 @@ A HACS custom integration that imports electricity usage from Hydro One's Green 
 - Refreshes the file every 15 minutes, so replacing it with an updated export updates the sensors.
 - Normalizes interval energy to kWh using the reading type's unit, multiplier, and power-of-ten multiplier.
 - Exposes four sensors: latest interval energy (kWh), imported energy total (kWh), latest reading time, and imported interval count.
+- Imports the full interval history into Home Assistant's external long-term energy statistics, preserving timestamps so historical usage can be explored in Energy-related statistics.
 - No Hydro One credentials are stored or used.
 
 The imported energy total is the sum of all interval readings in the current file, not a cumulative lifetime meter register. If a file contains multiple meter readings or overlapping records, the sum may not represent a single service's billable total. Check your export and sensor attributes before using it for billing calculations.
@@ -34,7 +35,7 @@ Do not publish or share the original XML. It can contain sensitive energy and ac
 1. Go to **Settings → Devices & services → Add integration**.
 2. Search for **Hydro One Green Button**.
 3. Enter the absolute path to the XML file, for example `/config/hydro-one-green-button.xml`.
-4. Confirm the integration creates the four sensors.
+4. Confirm the integration creates the four sensors and allows time for the initial historical-statistics import.
 
 Home Assistant must be able to read the file. The integration checks the file at setup and every 15 minutes thereafter. It does not provide a browser-based file upload; copy the file to Home Assistant using your normal file-transfer method.
 
@@ -42,7 +43,8 @@ Home Assistant must be able to read the file. The integration checks the file at
 
 - Green Button interval timestamps are interpreted as Unix timestamps in UTC.
 - Energy unit codes 72 (Wh), 73 (kWh), 74 (MWh), and 75 (GWh) are supported, as are common textual equivalents.
-- This initial version focuses on interval energy readings. Billing, cost, demand, transaction, and meter-register values are not exposed yet.
+- Historical statistics are imported under `hydro_one_green_button:historical_energy`. The import uses cumulative sums from interval readings, with a zero baseline before the first interval. If you replace the XML with a file that omits older history, the cumulative series may need to be rebuilt.
+- This release focuses on interval energy readings. Billing, cost, demand, transaction, and meter-register values are not exposed yet.
 - If the export contains multiple meter readings with different reading types, the parser uses each interval's associated `MeterReading` metadata when available.
 - The integration does not connect to Hydro One's CMD service. Hydro One requires third-party onboarding/approval for CMD apps; a future implementation must follow that process.
 
