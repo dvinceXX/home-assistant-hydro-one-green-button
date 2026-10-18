@@ -1,0 +1,28 @@
+name: Validate
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  parser-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install pytest
+      - run: pytest -q
+      - name: Validate integration metadata
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          manifest = json.loads(Path("custom_components/hydro_one_green_button/manifest.json").read_text())
+          hacs = json.loads(Path("hacs.json").read_text())
+          assert manifest["domain"] == "hydro_one_green_button"
+          assert manifest["config_flow"] is True
+          assert hacs["name"] == "Hydro One Green Button"
+          print("Integration metadata is valid")
+          PY
