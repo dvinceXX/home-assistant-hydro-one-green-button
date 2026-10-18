@@ -212,20 +212,27 @@ def parse_green_button_file(file_path: str | Path) -> GreenButtonData:
 def build_energy_statistics(readings: tuple[IntervalReading, ...]) -> list[dict[str, object]]:
     """Build cumulative Home Assistant energy statistics from interval usage.
 
-    Each imported point keeps the source interval's timestamp. The cumulative
-    sum lets Energy Dashboard calculate consumption from the differences
-    between adjacent points.
+    Add a zero-use baseline at the first interval start, then record the
+    cumulative total at each interval end. This aligns each interval's usage
+    with the period it describes when Home Assistant compares adjacent sums.
     """
+    if not readings:
+        return []
+
     cumulative_kwh = 0.0
-    statistics: list[dict[str, object]] = []
+    statistics: list[dict[str, object]] = [
+        {"start": readings[0].start, "state": 0.0, "sum": 0.0}
+    ]
     for reading in readings:
-        cumulative_kwh += reading.energy_kwh
-        cumulative_kwh = round(cumulative_kwh, 6)
+        cumulative_kwh = round(cumulative_kwh + reading.energy_kwh, 6)
         statistics.append(
             {
-                "start": reading.start,
+                "start": reading.start.timestamp() + reading.duration_seconds,
                 "state": cumulative_kwh,
                 "sum": cumulative_kwh,
             }
+        )
+        statistics[-1]["start"] = datetime.fromtimestamp(
+            statistics[-1]["start"], tz=reading.start.tzinfo
         )
     return statistics
