@@ -74,3 +74,15 @@ def test_resolves_split_atom_resources_by_href():
     data = parse_green_button_xml(xml)
     assert len(data.readings) == 1
     assert data.total_energy_kwh == pytest.approx(0.75)
+
+
+
+def test_builds_cumulative_energy_statistics():
+    data = parse_green_button_xml(make_xml(uom=72, value=500))
+    statistics = PARSER.build_energy_statistics(data.readings)
+    assert len(statistics) == 2
+    assert statistics[0]["start"] == datetime.fromtimestamp(1700000000, UTC)
+    assert statistics[0]["state"] == pytest.approx(0.5)
+    assert statistics[0]["sum"] == pytest.approx(0.5)
+    assert statistics[1]["state"] == pytest.approx(1.0)
+    assert statistics[1]["sum"] == pytest.approx(1.0)
