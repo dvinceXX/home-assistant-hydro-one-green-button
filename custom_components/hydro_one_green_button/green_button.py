@@ -6,7 +6,7 @@ Connect My Data source to reuse the normalized data model.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 import xml.etree.ElementTree as ET
 
@@ -227,12 +227,9 @@ def build_energy_statistics(readings: tuple[IntervalReading, ...]) -> list[dict[
         cumulative_kwh = round(cumulative_kwh + reading.energy_kwh, 6)
         statistics.append(
             {
-                "start": reading.start.timestamp() + reading.duration_seconds,
+                "start": reading.start + timedelta(seconds=reading.duration_seconds),
                 "state": cumulative_kwh,
                 "sum": cumulative_kwh,
             }
-        )
-        statistics[-1]["start"] = datetime.fromtimestamp(
-            statistics[-1]["start"], tz=reading.start.tzinfo
         )
     return statistics
