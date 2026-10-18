@@ -1,0 +1,18 @@
+{
+  "title": "Hydro One Green Button",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Import Hydro One Green Button XML",
+        "description": "Enter the absolute path to a Green Button XML file already accessible to Home Assistant. Example: {example_path}. Place the file in your configuration directory first.",
+        "data": {"file_path": "XML file path"}
+      }
+    },
+    "error": {
+      "file_not_found": "The file was not found. Check the path and make sure the file is on the Home Assistant system.",
+      "permission_denied": "Home Assistant does not have permission to read this file.",
+      "invalid_file": "The file could not be parsed as a supported Green Button XML usage export."
+    },
+    "abort": {"already_configured": "This file path is already configured."}
+  }
+}
