@@ -4,7 +4,6 @@ from __future__ import annotations
 import logging
 from datetime import datetime
 
-from homeassistant.components.recorder.models import StatisticMeanType
 from homeassistant.components.recorder.statistics import async_add_external_statistics
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -46,7 +45,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     {
                         "has_mean": False,
                         "has_sum": True,
-                        "mean_type": StatisticMeanType.ARITHMETIC,
                         "name": "Hydro One Historical Energy",
                         "source": DOMAIN,
                         "statistic_id": STATISTIC_ID,
