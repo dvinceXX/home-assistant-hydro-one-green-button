@@ -207,3 +207,25 @@ def parse_green_button_file(file_path: str | Path) -> GreenButtonData:
     """Read and parse a Green Button XML file from disk."""
     xml_text = Path(file_path).expanduser().read_text(encoding="utf-8-sig")
     return parse_green_button_xml(xml_text)
+
+
+def build_energy_statistics(readings: tuple[IntervalReading, ...]) -> list[dict[str, object]]:
+    """Build cumulative Home Assistant energy statistics from interval usage.
+
+    Each imported point keeps the source interval's timestamp. The cumulative
+    sum lets Energy Dashboard calculate consumption from the differences
+    between adjacent points.
+    """
+    cumulative_kwh = 0.0
+    statistics: list[dict[str, object]] = []
+    for reading in readings:
+        cumulative_kwh += reading.energy_kwh
+        cumulative_kwh = round(cumulative_kwh, 6)
+        statistics.append(
+            {
+                "start": reading.start,
+                "state": cumulative_kwh,
+                "sum": cumulative_kwh,
+            }
+        )
+    return statistics
