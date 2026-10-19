@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from homeassistant.components.recorder.statistics import async_add_external_statistics
 from homeassistant.config_entries import ConfigEntry
