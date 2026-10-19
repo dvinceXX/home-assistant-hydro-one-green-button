@@ -13,6 +13,7 @@ sys.modules[SPEC.name] = PARSER
 SPEC.loader.exec_module(PARSER)
 GreenButtonParseError = PARSER.GreenButtonParseError
 parse_green_button_xml = PARSER.parse_green_button_xml
+parse_green_button_source = PARSER.parse_green_button_source
 
 
 def make_xml(uom: int = 73, value: int = 1250, multiplier: int = 1, power: int = 0) -> str:
@@ -90,3 +91,29 @@ def test_builds_cumulative_energy_statistics():
     assert statistics[2]["start"] == datetime.fromtimestamp(1700001800, UTC)
     assert statistics[2]["state"] == pytest.approx(1.0)
     assert statistics[2]["sum"] == pytest.approx(1.0)
+
+
+
+def test_combines_xml_files_and_deduplicates_readings(tmp_path):
+    first = tmp_path / "week1.xml"
+    second = tmp_path / "week2.xml"
+    first.write_text(make_xml(uom=72, value=500), encoding="utf-8")
+    second.write_text(make_xml(uom=72, value=500), encoding="utf-8")
+    data = parse_green_button_source(tmp_path)
+    assert len(data.readings) == 2
+    assert data.total_energy_kwh == pytest.approx(1.0)
+
+
+def test_folder_without_xml_files_is_rejected(tmp_path):
+    with pytest.raises(GreenButtonParseError, match="No .xml files"):
+        parse_green_button_source(tmp_path)
+
+
+def test_cumulative_statistics_continue_from_previous_batch():
+    data = parse_green_button_xml(make_xml(uom=72, value=500))
+    statistics = PARSER.build_energy_statistics(
+        data.readings, initial_sum_kwh=10.0, include_baseline=False
+    )
+    assert len(statistics) == 2
+    assert statistics[0]["sum"] == pytest.approx(10.5)
+    assert statistics[1]["sum"] == pytest.approx(11.0)
