@@ -6,8 +6,8 @@ A HACS custom integration that imports electricity usage from Hydro One's Green 
 
 ## Features
 
-- Reads a Green Button XML file stored on the Home Assistant machine.
-- Refreshes the file every 15 minutes, so replacing it with an updated export updates the sensors.
+- Reads a Green Button XML file or scans a dedicated folder of XML exports on the Home Assistant machine.
+- Scans the configured source every 15 minutes, so new XML files can be dropped into a watched folder.
 - Normalizes interval energy to kWh using the reading type's unit, multiplier, and power-of-ten multiplier.
 - Exposes four sensors: latest interval energy (kWh), imported energy total (kWh), latest reading time, and imported interval count.
 - Imports the full interval history into Home Assistant's external long-term energy statistics, preserving timestamps so historical usage can be explored in Energy-related statistics.
@@ -25,8 +25,8 @@ The imported energy total is the sum of all interval readings in the current fil
 ## Prepare the XML file
 
 1. Sign in to Hydro One myAccount and download your Green Button data using **Download My Data**.
-2. Copy the XML file into a directory accessible to Home Assistant, such as `/config/hydro-one-green-button.xml`.
-3. Keep the file in place; future exports can replace that file.
+2. Create a dedicated folder accessible to Home Assistant, for example `/config/hydro-one-xml/`.
+3. Copy each weekly (or otherwise scheduled) Hydro One XML export into that folder. Keep older files there if possible; overlapping readings are deduplicated.
 
 Do not publish or share the original XML. It can contain sensitive energy and account information.
 
@@ -34,16 +34,16 @@ Do not publish or share the original XML. It can contain sensitive energy and ac
 
 1. Go to **Settings → Devices & services → Add integration**.
 2. Search for **Hydro One Green Button**.
-3. Enter the absolute path to the XML file, for example `/config/hydro-one-green-button.xml`.
+3. Enter the absolute path to the dedicated folder, for example `/config/hydro-one-xml/`. A single XML file path is still supported for compatibility.
 4. Confirm the integration creates the four sensors and allows time for the initial historical-statistics import.
 
-Home Assistant must be able to read the file. The integration checks the file at setup and every 15 minutes thereafter. It does not provide a browser-based file upload; copy the file to Home Assistant using your normal file-transfer method.
+Home Assistant must be able to read the file. The integration scans top-level `.xml` files in the folder at setup and every 15 minutes thereafter; it does not scan subfolders. It does not provide a browser-based file upload; copy the file to Home Assistant using your normal file-transfer method.
 
 ## Data interpretation and limitations
 
 - Green Button interval timestamps are interpreted as Unix timestamps in UTC.
 - Energy unit codes 72 (Wh), 73 (kWh), 74 (MWh), and 75 (GWh) are supported, as are common textual equivalents.
-- Historical statistics are imported under `hydro_one_green_button:historical_energy`. The import uses cumulative sums from interval readings, with a zero baseline before the first interval. If you replace the XML with a file that omits older history, the cumulative series may need to be rebuilt.
+- Historical statistics are imported under `hydro_one_green_button:historical_energy`. The integration stores imported local calendar days and the cumulative energy total in Home Assistant storage. It imports only days it has not imported before, and skips an entire day once any readings for that day have been imported. This avoids duplicates in overlapping weekly exports; readings added later for a day already imported are intentionally ignored.
 - This release focuses on interval energy readings. Billing, cost, demand, transaction, and meter-register values are not exposed yet.
 - If the export contains multiple meter readings with different reading types, the parser uses each interval's associated `MeterReading` metadata when available.
 - The integration does not connect to Hydro One's CMD service. Hydro One requires third-party onboarding/approval for CMD apps; a future implementation must follow that process.
