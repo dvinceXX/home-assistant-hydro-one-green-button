@@ -27,7 +27,7 @@ STORAGE_VERSION = 1
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up the integration from an XML file or a folder of exports."""
-    source_path = entry.data[CONF_FILE_PATH]
+    source_path = entry.options.get(CONF_FILE_PATH, entry.data[CONF_FILE_PATH])
     store: Store[dict] = Store(
         hass, STORAGE_VERSION, f"{DOMAIN}_{entry.entry_id}_import_state"
     )
@@ -136,6 +136,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         raise ConfigEntryNotReady from err
 
     entry.runtime_data = coordinator
+    entry.async_on_unload(entry.add_update_listener(async_reload_entry))
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 
@@ -143,3 +144,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload the integration."""
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+
+
+
+async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Reload the integration when its watched source path changes."""
+    await hass.config_entries.async_reload(entry.entry_id)
