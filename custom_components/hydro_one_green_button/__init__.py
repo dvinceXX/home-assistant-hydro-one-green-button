@@ -86,6 +86,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 {
                     "has_mean": False,
                     "has_sum": True,
+                    "mean_type": 0,
                     "name": "Hydro One Historical Energy",
                     "source": DOMAIN,
                     "statistic_id": STATISTIC_ID,
