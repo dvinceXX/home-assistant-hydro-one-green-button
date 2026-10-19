@@ -222,11 +222,14 @@ def parse_green_button_source(source_path: str | Path) -> GreenButtonData:
     if not source.is_dir():
         raise FileNotFoundError(f"Green Button path does not exist: {source}")
 
-    xml_files = sorted(path for path in source.glob("*.xml") if path.is_file())
+    xml_files = sorted(
+        (path for path in source.glob("*.xml") if path.is_file()),
+        key=lambda path: (path.stat().st_mtime, path.name),
+    )
     if not xml_files:
         raise GreenButtonParseError(f"No .xml files found in folder: {source}")
 
-    unique: dict[tuple[datetime, int, float], IntervalReading] = {}
+    unique: dict[tuple[datetime, int], IntervalReading] = {}
     errors: list[str] = []
     for xml_file in xml_files:
         try:
@@ -235,7 +238,7 @@ def parse_green_button_source(source_path: str | Path) -> GreenButtonData:
             errors.append(f"{xml_file.name}: {err}")
             continue
         for reading in data.readings:
-            unique[(reading.start, reading.duration_seconds, reading.energy_kwh)] = reading
+            unique[(reading.start, reading.duration_seconds)] = reading
 
     if not unique:
         details = "; ".join(errors) if errors else "no valid interval readings"
