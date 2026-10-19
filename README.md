@@ -35,7 +35,8 @@ Do not publish or share the original XML. It can contain sensitive energy and ac
 1. Go to **Settings → Devices & services → Add integration**.
 2. Search for **Hydro One Green Button**.
 3. Enter the absolute path to the dedicated folder, for example `/config/hydro-one-xml/`. A single XML file path is still supported for compatibility.
-4. Confirm the integration creates the four sensors and allows time for the initial historical-statistics import.
+4. If the integration is already configured to a single file, open its **Configure** options and change the path to the folder; this preserves the existing import tracking state.
+5. Confirm the integration creates the four sensors and allows time for the initial historical-statistics import.
 
 Home Assistant must be able to read the file. The integration scans top-level `.xml` files in the folder at setup and every 15 minutes thereafter; it does not scan subfolders. It does not provide a browser-based file upload; copy the file to Home Assistant using your normal file-transfer method.
 
