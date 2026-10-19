@@ -209,27 +209,64 @@ def parse_green_button_file(file_path: str | Path) -> GreenButtonData:
     return parse_green_button_xml(xml_text)
 
 
-def build_energy_statistics(readings: tuple[IntervalReading, ...]) -> list[dict[str, object]]:
-    """Build cumulative Home Assistant energy statistics from interval usage.
 
-    Add a zero-use baseline at the first interval start, then record the
-    cumulative total at each interval end. This aligns each interval's usage
-    with the period it describes when Home Assistant compares adjacent sums.
+
+def parse_green_button_source(source_path: str | Path) -> GreenButtonData:
+    """Parse one XML file or combine top-level XML files in a directory.
+
+    Identical intervals repeated in overlapping exports are deduplicated.
     """
+    source = Path(source_path).expanduser()
+    if source.is_file():
+        return parse_green_button_file(source)
+    if not source.is_dir():
+        raise FileNotFoundError(f"Green Button path does not exist: {source}")
+
+    xml_files = sorted(path for path in source.glob("*.xml") if path.is_file())
+    if not xml_files:
+        raise GreenButtonParseError(f"No .xml files found in folder: {source}")
+
+    unique: dict[tuple[datetime, int, float], IntervalReading] = {}
+    errors: list[str] = []
+    for xml_file in xml_files:
+        try:
+            data = parse_green_button_file(xml_file)
+        except (OSError, GreenButtonParseError) as err:
+            errors.append(f"{xml_file.name}: {err}")
+            continue
+        for reading in data.readings:
+            unique[(reading.start, reading.duration_seconds, reading.energy_kwh)] = reading
+
+    if not unique:
+        details = "; ".join(errors) if errors else "no valid interval readings"
+        raise GreenButtonParseError(f"No usable Green Button XML files in {source}: {details}")
+
+    readings = tuple(sorted(unique.values(), key=lambda item: item.start))
+    return GreenButtonData(readings, sum(item.energy_kwh for item in readings), readings[-1])
+
+
+def build_energy_statistics(
+    readings: tuple[IntervalReading, ...],
+    initial_sum_kwh: float = 0.0,
+    include_baseline: bool = True,
+) -> list[dict[str, object]]:
+    """Build cumulative energy statistics for a batch of previously unimported intervals."""
     if not readings:
         return []
 
-    cumulative_kwh = 0.0
-    statistics: list[dict[str, object]] = [
-        {"start": readings[0].start, "state": 0.0, "sum": 0.0}
-    ]
+    cumulative_kwh = round(initial_sum_kwh, 6)
+    statistics: list[dict[str, object]] = []
+    if include_baseline:
+        statistics.append({
+            "start": readings[0].start,
+            "state": cumulative_kwh,
+            "sum": cumulative_kwh,
+        })
     for reading in readings:
         cumulative_kwh = round(cumulative_kwh + reading.energy_kwh, 6)
-        statistics.append(
-            {
-                "start": reading.start + timedelta(seconds=reading.duration_seconds),
-                "state": cumulative_kwh,
-                "sum": cumulative_kwh,
-            }
-        )
+        statistics.append({
+            "start": reading.start + timedelta(seconds=reading.duration_seconds),
+            "state": cumulative_kwh,
+            "sum": cumulative_kwh,
+        })
     return statistics
