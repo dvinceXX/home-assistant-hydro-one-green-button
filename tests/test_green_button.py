@@ -117,3 +117,32 @@ def test_cumulative_statistics_continue_from_previous_batch():
     assert len(statistics) == 2
     assert statistics[0]["sum"] == pytest.approx(10.5)
     assert statistics[1]["sum"] == pytest.approx(11.0)
+
+
+
+def test_later_export_can_fill_missing_intervals_in_same_day(tmp_path):
+    first = tmp_path / "partial.xml"
+    second = tmp_path / "complete.xml"
+    partial = make_xml(uom=72, value=500)
+    complete = make_xml(uom=72, value=500).replace(
+        "</espi:IntervalBlock>",
+        '<espi:IntervalReading><espi:timePeriod><espi:start>1700001800</espi:start>'
+        '<espi:duration>900</espi:duration></espi:timePeriod><espi:value>700</espi:value>'
+        '</espi:IntervalReading></espi:IntervalBlock>',
+    )
+    first.write_text(partial, encoding="utf-8")
+    second.write_text(complete, encoding="utf-8")
+    data = parse_green_button_source(tmp_path)
+    assert len(data.readings) == 3
+    assert data.total_energy_kwh == pytest.approx(1.7)
+    stats = PARSER.build_energy_statistics(data.readings)
+    assert stats[-1]["sum"] == pytest.approx(1.7)
+
+
+def test_rebuilding_statistics_adjusts_later_cumulative_sum():
+    first = PARSER.IntervalReading(datetime.fromtimestamp(1700000000, UTC), 3600, 1.0)
+    later = PARSER.IntervalReading(datetime.fromtimestamp(1700086400, UTC), 3600, 2.0)
+    original = PARSER.build_energy_statistics((later,))
+    rebuilt = PARSER.build_energy_statistics((first, later))
+    assert original[-1]["sum"] == pytest.approx(2.0)
+    assert rebuilt[-1]["sum"] == pytest.approx(3.0)
