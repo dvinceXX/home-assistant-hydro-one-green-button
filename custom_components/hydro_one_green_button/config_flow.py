@@ -47,15 +47,11 @@ class HydroOneGreenButtonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     @staticmethod
     def async_get_options_flow(config_entry: ConfigEntry):
         """Create the options flow for an existing integration entry."""
-        return HydroOneGreenButtonOptionsFlow(config_entry)
+        return HydroOneGreenButtonOptionsFlow()
 
 
 class HydroOneGreenButtonOptionsFlow(config_entries.OptionsFlow):
     """Allow changing the XML file or watched folder without removing the entry."""
-
-    def __init__(self, config_entry: ConfigEntry) -> None:
-        """Keep the existing config entry so import state is preserved."""
-        self.config_entry = config_entry
 
     async def async_step_init(self, user_input: dict | None = None):
         """Choose a new XML source path."""
