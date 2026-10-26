@@ -44,7 +44,7 @@ Home Assistant must be able to read the file. The integration scans top-level `.
 
 - Green Button interval timestamps are interpreted as Unix timestamps in UTC.
 - Energy unit codes 72 (Wh), 73 (kWh), 74 (MWh), and 75 (GWh) are supported, as are common textual equivalents.
-- Historical statistics are imported under `hydro_one_green_button:historical_energy`. The integration stores imported local calendar days and the cumulative energy total in Home Assistant storage. It imports only days it has not imported before, and skips an entire day once any readings for that day have been imported. This avoids duplicates in overlapping weekly exports; readings added later for a day already imported are intentionally ignored.
+- Historical statistics are imported under `hydro_one_green_button:historical_energy`. When the combined readings change, the integration rebuilds and submits the complete cumulative series. This allows later exports to fill missing hourly intervals on a day that was only partially available before and recalculates later cumulative sums. Keep older XML files in the folder so the full history is available during each rebuild.
 - This release focuses on interval energy readings. Billing, cost, demand, transaction, and meter-register values are not exposed yet.
 - If the export contains multiple meter readings with different reading types, the parser uses each interval's associated `MeterReading` metadata when available.
 - The integration does not connect to Hydro One's CMD service. Hydro One requires third-party onboarding/approval for CMD apps; a future implementation must follow that process.
