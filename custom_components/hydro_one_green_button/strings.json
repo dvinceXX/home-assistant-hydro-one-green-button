@@ -22,10 +22,13 @@
   "options": {
     "step": {
       "init": {
-        "title": "Change Hydro One XML source",
-        "description": "Enter a single XML file path or a dedicated folder containing XML exports. Use a folder for automatic incremental weekly imports. Example: {example_path}.",
+        "title": "Hydro One XML source and TOU rates",
+        "description": "Enter the XML file or folder and your Ontario time-of-use electricity rates in CAD/kWh. Rates are used to calculate historical costs for every imported interval.",
         "data": {
-          "file_path": "XML file or folder path"
+          "file_path": "XML file or folder path",
+          "off_peak_rate": "Off-peak rate (CAD/kWh)",
+          "mid_peak_rate": "Mid-peak rate (CAD/kWh)",
+          "on_peak_rate": "On-peak rate (CAD/kWh)"
         }
       }
     },

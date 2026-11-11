@@ -10,21 +10,40 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .const import CONF_FILE_PATH, DEFAULT_SCAN_INTERVAL, DOMAIN, PLATFORMS
+from .const import (
+    CONF_FILE_PATH,
+    CONF_MID_PEAK_RATE,
+    CONF_OFF_PEAK_RATE,
+    CONF_ON_PEAK_RATE,
+    DEFAULT_MID_PEAK_RATE,
+    DEFAULT_OFF_PEAK_RATE,
+    DEFAULT_ON_PEAK_RATE,
+    DEFAULT_SCAN_INTERVAL,
+    DOMAIN,
+    PLATFORMS,
+)
 from .green_button import (
     GreenButtonData,
     GreenButtonParseError,
     build_energy_statistics,
     parse_green_button_source,
 )
+from .pricing import build_cost_statistics
 
 _LOGGER = logging.getLogger(__name__)
-STATISTIC_ID = f"{DOMAIN}:historical_energy"
+ENERGY_STATISTIC_ID = f"{DOMAIN}:historical_energy"
+COST_STATISTIC_ID = f"{DOMAIN}:historical_cost"
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up the integration from an XML file or a folder of exports."""
     source_path = entry.options.get(CONF_FILE_PATH, entry.data[CONF_FILE_PATH])
+    rates = {
+        "off_peak": float(entry.options.get(CONF_OFF_PEAK_RATE, DEFAULT_OFF_PEAK_RATE)),
+        "mid_peak": float(entry.options.get(CONF_MID_PEAK_RATE, DEFAULT_MID_PEAK_RATE)),
+        "on_peak": float(entry.options.get(CONF_ON_PEAK_RATE, DEFAULT_ON_PEAK_RATE)),
+    }
+    time_zone = hass.config.time_zone
     last_import_signature: tuple[tuple[datetime, int, float], ...] | None = None
 
     async def async_update_data() -> GreenButtonData:
@@ -43,11 +62,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if signature == last_import_signature:
             return data
 
-        # Rebuild the full cumulative series whenever source data changes.
-        # This allows later exports to fill gaps in earlier days and recalculates
-        # cumulative sums for all later intervals.
+        # Rebuild both complete cumulative series whenever source data changes.
+        # This also allows a later export to fill gaps in an earlier partial day.
         try:
-            statistics = build_energy_statistics(data.readings)
+            energy_statistics = build_energy_statistics(data.readings)
+            cost_statistics = await hass.async_add_executor_job(
+                build_cost_statistics, data.readings, rates, time_zone
+            )
             async_add_external_statistics(
                 hass,
                 {
@@ -56,19 +77,36 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     "mean_type": 0,
                     "name": "Hydro One Historical Energy",
                     "source": DOMAIN,
-                    "statistic_id": STATISTIC_ID,
+                    "statistic_id": ENERGY_STATISTIC_ID,
                     "unit_class": "energy",
                     "unit_of_measurement": "kWh",
                 },
-                statistics,
+                energy_statistics,
+            )
+            async_add_external_statistics(
+                hass,
+                {
+                    "has_mean": False,
+                    "has_sum": True,
+                    "mean_type": 0,
+                    "name": "Hydro One Historical Electricity Cost",
+                    "source": DOMAIN,
+                    "statistic_id": COST_STATISTIC_ID,
+                    "unit_class": None,
+                    "unit_of_measurement": "CAD",
+                },
+                cost_statistics,
             )
             last_import_signature = signature
             _LOGGER.info(
-                "Submitted %d Hydro One interval readings to historical energy statistics",
+                "Submitted %d Hydro One interval readings, %d energy statistics "
+                "and %d hourly cost statistics",
                 len(data.readings),
+                len(energy_statistics),
+                len(cost_statistics),
             )
         except Exception:
-            _LOGGER.exception("Unable to import Hydro One historical energy statistics")
+            _LOGGER.exception("Unable to import Hydro One energy/cost statistics")
 
         return data
 

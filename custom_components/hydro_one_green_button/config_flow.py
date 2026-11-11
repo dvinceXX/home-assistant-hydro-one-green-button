@@ -5,7 +5,16 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.config_entries import ConfigEntry
 
-from .const import CONF_FILE_PATH, DOMAIN
+from .const import (
+    CONF_FILE_PATH,
+    CONF_MID_PEAK_RATE,
+    CONF_OFF_PEAK_RATE,
+    CONF_ON_PEAK_RATE,
+    DEFAULT_MID_PEAK_RATE,
+    DEFAULT_OFF_PEAK_RATE,
+    DEFAULT_ON_PEAK_RATE,
+    DOMAIN,
+)
 from .green_button import GreenButtonParseError, parse_green_button_source
 
 
@@ -51,10 +60,10 @@ class HydroOneGreenButtonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 
 class HydroOneGreenButtonOptionsFlow(config_entries.OptionsFlow):
-    """Allow changing the XML file or watched folder without removing the entry."""
+    """Allow changing the source path and TOU prices."""
 
     async def async_step_init(self, user_input: dict | None = None):
-        """Choose a new XML source path."""
+        """Choose a new XML source path and TOU rates."""
         errors: dict[str, str] = {}
         if user_input is not None:
             source_path = user_input[CONF_FILE_PATH].strip()
@@ -69,7 +78,12 @@ class HydroOneGreenButtonOptionsFlow(config_entries.OptionsFlow):
             except (OSError, GreenButtonParseError):
                 errors["base"] = "invalid_file"
             else:
-                return self.async_create_entry(title="", data={CONF_FILE_PATH: source_path})
+                return self.async_create_entry(title="", data={
+                    CONF_FILE_PATH: source_path,
+                    CONF_OFF_PEAK_RATE: float(user_input[CONF_OFF_PEAK_RATE]),
+                    CONF_MID_PEAK_RATE: float(user_input[CONF_MID_PEAK_RATE]),
+                    CONF_ON_PEAK_RATE: float(user_input[CONF_ON_PEAK_RATE]),
+                })
 
         current_path = self.config_entry.options.get(
             CONF_FILE_PATH, self.config_entry.data[CONF_FILE_PATH]
@@ -77,7 +91,25 @@ class HydroOneGreenButtonOptionsFlow(config_entries.OptionsFlow):
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema({
-                vol.Required(CONF_FILE_PATH, default=current_path): str
+                vol.Required(CONF_FILE_PATH, default=current_path): str,
+                vol.Required(
+                    CONF_OFF_PEAK_RATE,
+                    default=self.config_entry.options.get(
+                        CONF_OFF_PEAK_RATE, DEFAULT_OFF_PEAK_RATE
+                    ),
+                ): vol.All(vol.Coerce(float), vol.Range(min=0)),
+                vol.Required(
+                    CONF_MID_PEAK_RATE,
+                    default=self.config_entry.options.get(
+                        CONF_MID_PEAK_RATE, DEFAULT_MID_PEAK_RATE
+                    ),
+                ): vol.All(vol.Coerce(float), vol.Range(min=0)),
+                vol.Required(
+                    CONF_ON_PEAK_RATE,
+                    default=self.config_entry.options.get(
+                        CONF_ON_PEAK_RATE, DEFAULT_ON_PEAK_RATE
+                    ),
+                ): vol.All(vol.Coerce(float), vol.Range(min=0)),
             }),
             errors=errors,
             description_placeholders={"example_path": "/config/hydro-one-xml"},
