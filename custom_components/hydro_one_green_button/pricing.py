@@ -3,9 +3,11 @@ from __future__ import annotations
 
 from collections import defaultdict
 from datetime import UTC, date, datetime, timedelta
+from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
-from .green_button import IntervalReading
+if TYPE_CHECKING:
+    from .green_button import IntervalReading
 
 DEFAULT_OFF_PEAK_RATE = 0.091
 DEFAULT_MID_PEAK_RATE = 0.146
@@ -20,10 +22,7 @@ def _nth_weekday(year: int, month: int, weekday: int, occurrence: int) -> date:
 
 def _last_weekday(year: int, month: int, weekday: int) -> date:
     """Return the last weekday in a month."""
-    if month == 12:
-        first_next = date(year + 1, 1, 1)
-    else:
-        first_next = date(year, month + 1, 1)
+    first_next = date(year + 1, 1, 1) if month == 12 else date(year, month + 1, 1)
     last = first_next - timedelta(days=1)
     return last - timedelta(days=(last.weekday() - weekday) % 7)
 
@@ -45,18 +44,18 @@ def _easter_sunday(year: int) -> date:
 
 
 def ontario_tou_holidays(year: int) -> set[date]:
-    """Ontario TOU holidays: OEB statutory holidays, not the Civic Holiday."""
+    """Ontario TOU holidays used by the OEB; Civic Holiday is not included."""
     easter = _easter_sunday(year)
     return {
-        date(year, 1, 1),                         # New Year's Day
-        _nth_weekday(year, 2, 0, 3),              # Family Day
-        easter - timedelta(days=2),               # Good Friday
-        _last_weekday(year, 5, 0),                # Victoria Day
-        date(year, 7, 1),                         # Canada Day
-        _nth_weekday(year, 9, 0, 1),              # Labour Day
-        _nth_weekday(year, 10, 0, 2),             # Thanksgiving
-        date(year, 12, 25),                       # Christmas Day
-        date(year, 12, 26),                       # Boxing Day
+        date(year, 1, 1),
+        _nth_weekday(year, 2, 0, 3),
+        easter - timedelta(days=2),
+        _last_weekday(year, 5, 0),
+        date(year, 7, 1),
+        _nth_weekday(year, 9, 0, 1),
+        _nth_weekday(year, 10, 0, 2),
+        date(year, 12, 25),
+        date(year, 12, 26),
     }
 
 
@@ -95,10 +94,10 @@ def build_cost_statistics(
     rates: dict[str, float] | None = None,
     time_zone: str = "America/Toronto",
 ) -> list[dict[str, object]]:
-    """Build cumulative CAD cost statistics, grouped into UTC hourly periods.
+    """Build cumulative CAD cost statistics grouped into UTC hourly periods.
 
-    Interval energy is apportioned evenly over its duration. This also handles
-    intervals that overlap a TOU boundary or a UTC hour boundary.
+    Energy is apportioned evenly across each interval. Ontario's TOU boundaries
+    occur on local whole hours, which align with UTC hour boundaries.
     """
     if not readings:
         return []
@@ -110,8 +109,7 @@ def build_cost_statistics(
         cursor = start
         while cursor < end:
             hour_start = cursor.replace(minute=0, second=0, microsecond=0)
-            next_boundary = hour_start + timedelta(hours=1)
-            segment_end = min(end, next_boundary)
+            segment_end = min(end, hour_start + timedelta(hours=1))
             seconds = (segment_end - cursor).total_seconds()
             energy = reading.energy_kwh * seconds / reading.duration_seconds
             hourly_costs[hour_start] += energy * tou_rate_for_datetime(
