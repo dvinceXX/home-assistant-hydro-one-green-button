@@ -18,7 +18,6 @@ DEFAULT_RATE_EFFECTIVE_DATE = date(2026, 11, 1)
 # Each set takes effect on November 1 and remains in force until the next
 # November 1 price change.
 HISTORICAL_RATE_SCHEDULE: tuple[tuple[date, dict[str, float]], ...] = (
-    (date(2021, 11, 1), {"off_peak": 0.082, "mid_peak": 0.113, "on_peak": 0.170}),
     (date(2022, 11, 1), {"off_peak": 0.074, "mid_peak": 0.102, "on_peak": 0.151}),
     (date(2023, 11, 1), {"off_peak": 0.087, "mid_peak": 0.122, "on_peak": 0.182}),
     (date(2024, 11, 1), {"off_peak": 0.076, "mid_peak": 0.122, "on_peak": 0.158}),
