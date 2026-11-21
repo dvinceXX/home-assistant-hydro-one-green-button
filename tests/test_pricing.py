@@ -93,13 +93,13 @@ def test_historical_rates_change_on_november_first():
     assert tou_rate_for_datetime(dt("2024-11-01T12:00:00"), RATES) == 0.158
     assert tou_rate_for_datetime(dt("2025-10-31T12:00:00"), RATES) == 0.122
     assert tou_rate_for_datetime(dt("2025-11-03T12:00:00"), RATES) == 0.203
-    assert tou_rate_for_datetime(dt("2026-10-31T12:00:00"), RATES) == 0.157
+    assert tou_rate_for_datetime(dt("2026-10-30T12:00:00"), RATES) == 0.157
     assert tou_rate_for_datetime(dt("2026-11-02T12:00:00"), RATES) == 0.189
 
 
 def test_configured_future_rates_apply_from_effective_date():
     custom = {"off_peak": 0.11, "mid_peak": 0.16, "on_peak": 0.21}
-    before = dt("2027-10-31T12:00:00")
+    before = dt("2027-10-29T12:00:00")
     effective = dt("2027-11-01T12:00:00")
     assert tou_rate_for_datetime(
         before, custom, rate_effective_date=date(2027, 11, 1)
