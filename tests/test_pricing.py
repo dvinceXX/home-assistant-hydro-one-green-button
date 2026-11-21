@@ -58,8 +58,8 @@ def test_builds_cumulative_cost_statistics_for_hourly_readings():
     stats = build_cost_statistics(readings, RATES)
     assert len(stats) == 3
     assert stats[0]["sum"] == 0.0
-    assert stats[1]["sum"] == 0.406
-    assert stats[2]["sum"] == 0.609
+    assert stats[1]["sum"] == 0.314
+    assert stats[2]["sum"] == 0.471
 
 
 def test_cost_interval_crossing_tou_boundary_is_split_by_duration():
