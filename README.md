@@ -10,7 +10,7 @@ A HACS custom integration that imports electricity usage from Hydro One's Green 
 - Imports historical energy into Home Assistant external long-term statistics.
 - Imports a separate cumulative historical electricity-cost statistic for the Energy Dashboard.
 - Calculates Ontario TOU costs using each interval's local date/time, winter/summer schedule, weekends, and Ontario TOU holidays.
-- Lets you configure the three CAD/kWh rates in the integration's Configure options.
+- Lets you configure the three CAD/kWh rates and their effective date in the integration's Configure options.
 - Rebuilds both complete cumulative series when readings or configured rates change, so later exports can fill gaps in earlier partial days.
 - Does not store or use Hydro One credentials.
 
@@ -64,8 +64,6 @@ To configure rates for a future OEB change, open **Settings → Devices & servic
 On the first setup after this update, the integration clears and rebuilds only its own historical_energy and historical_cost statistics over the imported history range. This corrects the previous energy interval-end timestamps and recalculates historical costs using the effective-date rate schedule. Other Home Assistant statistics are not cleared. The one-time migration is recorded in the config entry so normal restarts do not repeat the cleanup.
 
 ## Important calculation details
-
-
 
 - Interval energy is assumed to be consumed evenly across the interval. If an interval crosses a TOU boundary, its energy is split proportionally between the applicable rates.
 - The historical cost statistic includes only the configured per-kWh energy rates. It does not include fixed monthly charges, delivery charges, regulatory charges, taxes, or rebates unless those are reflected in the configured rates.
