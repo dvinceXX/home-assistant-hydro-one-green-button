@@ -1,6 +1,8 @@
 """Config and options flows for Hydro One Green Button XML imports."""
 from __future__ import annotations
 
+from datetime import date
+
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.config_entries import ConfigEntry
@@ -10,16 +12,27 @@ from .const import (
     CONF_MID_PEAK_RATE,
     CONF_OFF_PEAK_RATE,
     CONF_ON_PEAK_RATE,
+    CONF_RATE_EFFECTIVE_DATE,
     DEFAULT_MID_PEAK_RATE,
     DEFAULT_OFF_PEAK_RATE,
     DEFAULT_ON_PEAK_RATE,
     DOMAIN,
 )
 from .green_button import GreenButtonParseError, parse_green_button_source
+from .pricing import DEFAULT_RATE_EFFECTIVE_DATE
+
+
+def _validate_effective_date(value: str) -> str:
+    """Validate an ISO date used as the effective date for configured rates."""
+    try:
+        date.fromisoformat(value)
+    except (TypeError, ValueError) as err:
+        raise vol.Invalid("Enter a date in YYYY-MM-DD format") from err
+    return value
 
 
 class HydroOneGreenButtonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Set up Hydro One Green Button from an XML file or watched folder."""
+    """Set up Hydro One Green Button from an XML file or a watched folder."""
 
     VERSION = 1
 
@@ -60,7 +73,7 @@ class HydroOneGreenButtonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 
 class HydroOneGreenButtonOptionsFlow(config_entries.OptionsFlow):
-    """Allow changing the source path and TOU prices."""
+    """Allow changing the source path, TOU prices, and their effective date."""
 
     async def async_step_init(self, user_input: dict | None = None):
         """Choose a new XML source path and TOU rates."""
@@ -83,6 +96,7 @@ class HydroOneGreenButtonOptionsFlow(config_entries.OptionsFlow):
                     CONF_OFF_PEAK_RATE: float(user_input[CONF_OFF_PEAK_RATE]),
                     CONF_MID_PEAK_RATE: float(user_input[CONF_MID_PEAK_RATE]),
                     CONF_ON_PEAK_RATE: float(user_input[CONF_ON_PEAK_RATE]),
+                    CONF_RATE_EFFECTIVE_DATE: user_input[CONF_RATE_EFFECTIVE_DATE],
                 })
 
         current_path = self.config_entry.options.get(
@@ -110,6 +124,13 @@ class HydroOneGreenButtonOptionsFlow(config_entries.OptionsFlow):
                         CONF_ON_PEAK_RATE, DEFAULT_ON_PEAK_RATE
                     ),
                 ): vol.All(vol.Coerce(float), vol.Range(min=0)),
+                vol.Required(
+                    CONF_RATE_EFFECTIVE_DATE,
+                    default=self.config_entry.options.get(
+                        CONF_RATE_EFFECTIVE_DATE,
+                        DEFAULT_RATE_EFFECTIVE_DATE.isoformat(),
+                    ),
+                ): vol.All(str, _validate_effective_date),
             }),
             errors=errors,
             description_placeholders={"example_path": "/config/hydro-one-xml"},
