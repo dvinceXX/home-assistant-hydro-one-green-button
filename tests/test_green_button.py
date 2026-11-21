@@ -82,13 +82,13 @@ def test_builds_cumulative_energy_statistics():
     data = parse_green_button_xml(make_xml(uom=72, value=500))
     statistics = PARSER.build_energy_statistics(data.readings)
     assert len(statistics) == 3
-    assert statistics[0]["start"] == datetime.fromtimestamp(1700000000, UTC)
+    assert statistics[0]["start"] == datetime.fromtimestamp(1699999100, UTC)
     assert statistics[0]["state"] == pytest.approx(0.0)
     assert statistics[0]["sum"] == pytest.approx(0.0)
-    assert statistics[1]["start"] == datetime.fromtimestamp(1700000900, UTC)
+    assert statistics[1]["start"] == datetime.fromtimestamp(1700000000, UTC)
     assert statistics[1]["state"] == pytest.approx(0.5)
     assert statistics[1]["sum"] == pytest.approx(0.5)
-    assert statistics[2]["start"] == datetime.fromtimestamp(1700001800, UTC)
+    assert statistics[2]["start"] == datetime.fromtimestamp(1700000900, UTC)
     assert statistics[2]["state"] == pytest.approx(1.0)
     assert statistics[2]["sum"] == pytest.approx(1.0)
 
@@ -146,3 +146,26 @@ def test_rebuilding_statistics_adjusts_later_cumulative_sum():
     rebuilt = PARSER.build_energy_statistics((first, later))
     assert original[-1]["sum"] == pytest.approx(2.0)
     assert rebuilt[-1]["sum"] == pytest.approx(3.0)
+
+
+
+def test_energy_statistics_keep_interval_start_across_dst_spring_forward():
+    # Toronto jumps from 01:59 EST to 03:00 EDT on 2026-03-08.
+    first = PARSER.IntervalReading(datetime.fromisoformat("2026-03-08T06:00:00+00:00"), 3600, 1.0)
+    second = PARSER.IntervalReading(datetime.fromisoformat("2026-03-08T07:00:00+00:00"), 3600, 2.0)
+    statistics = PARSER.build_energy_statistics((first, second))
+    assert statistics[1]["start"] == first.start
+    assert statistics[2]["start"] == second.start
+    assert statistics[1]["sum"] == pytest.approx(1.0)
+    assert statistics[2]["sum"] == pytest.approx(3.0)
+
+
+def test_energy_statistics_keep_both_repeated_dst_fall_back_hours():
+    # Toronto has two distinct 01:00 hours on 2026-11-01.
+    first = PARSER.IntervalReading(datetime.fromisoformat("2026-11-01T05:00:00+00:00"), 3600, 1.0)
+    second = PARSER.IntervalReading(datetime.fromisoformat("2026-11-01T06:00:00+00:00"), 3600, 2.0)
+    statistics = PARSER.build_energy_statistics((first, second))
+    assert statistics[1]["start"] == first.start
+    assert statistics[2]["start"] == second.start
+    assert statistics[1]["start"] != statistics[2]["start"]
+    assert statistics[2]["sum"] == pytest.approx(3.0)

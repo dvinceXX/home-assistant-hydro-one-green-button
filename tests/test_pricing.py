@@ -1,5 +1,5 @@
 """Tests for Ontario TOU cost statistics."""
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 import importlib.util
 from pathlib import Path
 import sys
@@ -32,21 +32,21 @@ def dt(value: str) -> datetime:
 
 
 def test_winter_weekday_tou_periods():
-    assert tou_rate_for_datetime(dt("2026-01-12T13:00:00"), RATES) == 0.189  # 8 a.m.
-    assert tou_rate_for_datetime(dt("2026-01-12T18:00:00"), RATES) == 0.146  # 1 p.m.
-    assert tou_rate_for_datetime(dt("2026-01-12T23:00:00"), RATES) == 0.189  # 6 p.m.
-    assert tou_rate_for_datetime(dt("2026-01-13T01:00:00"), RATES) == 0.091  # 8 p.m.
+    assert tou_rate_for_datetime(dt("2026-01-12T13:00:00"), RATES) == 0.203  # 8 a.m.
+    assert tou_rate_for_datetime(dt("2026-01-12T18:00:00"), RATES) == 0.157  # 1 p.m.
+    assert tou_rate_for_datetime(dt("2026-01-12T23:00:00"), RATES) == 0.203  # 6 p.m.
+    assert tou_rate_for_datetime(dt("2026-01-13T01:00:00"), RATES) == 0.098  # 8 p.m.
 
 
 def test_summer_weekday_tou_periods():
-    assert tou_rate_for_datetime(dt("2026-07-13T12:00:00"), RATES) == 0.146  # 8 a.m.
-    assert tou_rate_for_datetime(dt("2026-07-13T17:00:00"), RATES) == 0.189  # 1 p.m.
-    assert tou_rate_for_datetime(dt("2026-07-13T22:00:00"), RATES) == 0.146  # 6 p.m.
+    assert tou_rate_for_datetime(dt("2026-07-13T12:00:00"), RATES) == 0.157  # 8 a.m.
+    assert tou_rate_for_datetime(dt("2026-07-13T17:00:00"), RATES) == 0.203  # 1 p.m.
+    assert tou_rate_for_datetime(dt("2026-07-13T22:00:00"), RATES) == 0.157  # 6 p.m.
 
 
 def test_weekends_and_ontario_tou_holidays_are_off_peak():
-    assert tou_rate_for_datetime(dt("2026-01-10T18:00:00"), RATES) == 0.091
-    assert tou_rate_for_datetime(dt("2026-02-16T18:00:00"), RATES) == 0.091
+    assert tou_rate_for_datetime(dt("2026-01-10T18:00:00"), RATES) == 0.098
+    assert tou_rate_for_datetime(dt("2026-02-16T18:00:00"), RATES) == 0.098
     assert tou_rate_for_datetime(dt("2026-12-25T18:00:00"), RATES) == 0.091
 
 
@@ -58,21 +58,21 @@ def test_builds_cumulative_cost_statistics_for_hourly_readings():
     stats = build_cost_statistics(readings, RATES)
     assert len(stats) == 3
     assert stats[0]["sum"] == 0.0
-    assert stats[1]["sum"] == 0.292
-    assert stats[2]["sum"] == 0.438
+    assert stats[1]["sum"] == 0.314
+    assert stats[2]["sum"] == 0.471
 
 
 def test_cost_interval_crossing_tou_boundary_is_split_by_duration():
     # Winter weekday 10:30–11:30: half an hour on-peak, half an hour mid-peak.
     readings = (IntervalReading(dt("2026-01-12T15:30:00"), 3600, 2.0),)
     stats = build_cost_statistics(readings, RATES)
-    assert stats[-1]["sum"] == 0.335
+    assert stats[-1]["sum"] == 0.360
 
 
 def test_custom_rates_are_applied():
     readings = (IntervalReading(dt("2026-01-12T18:00:00"), 3600, 2.0),)
     custom = {"off_peak": 0.10, "mid_peak": 0.20, "on_peak": 0.30}
-    stats = build_cost_statistics(readings, custom)
+    stats = build_cost_statistics(readings, custom, rate_effective_date=date(2025, 11, 1))
     assert stats[-1]["sum"] == 0.40
 
 
@@ -84,3 +84,40 @@ def test_dst_fall_back_hours_are_priced_by_local_clock():
     )
     stats = build_cost_statistics(readings, RATES)
     assert stats[-1]["sum"] == 0.182
+
+
+
+def test_historical_rates_change_on_november_first():
+    # Verify the November rate changes; October still follows the summer TOU schedule.
+    assert tou_rate_for_datetime(dt("2024-10-31T12:00:00"), RATES) == 0.122
+    assert tou_rate_for_datetime(dt("2024-11-01T12:00:00"), RATES) == 0.158
+    assert tou_rate_for_datetime(dt("2025-10-31T12:00:00"), RATES) == 0.122
+    assert tou_rate_for_datetime(dt("2025-11-03T12:00:00"), RATES) == 0.203
+    assert tou_rate_for_datetime(dt("2026-10-30T12:00:00"), RATES) == 0.157
+    assert tou_rate_for_datetime(dt("2026-11-02T12:00:00"), RATES) == 0.189
+
+
+def test_configured_future_rates_apply_from_effective_date():
+    custom = {"off_peak": 0.11, "mid_peak": 0.16, "on_peak": 0.21}
+    before = dt("2027-10-29T12:00:00")
+    effective = dt("2027-11-01T12:00:00")
+    assert tou_rate_for_datetime(
+        before, custom, rate_effective_date=date(2027, 11, 1)
+    ) == 0.146
+    assert tou_rate_for_datetime(
+        effective, custom, rate_effective_date=date(2027, 11, 1)
+    ) == 0.21
+
+
+def test_pre_november_2022_uses_earliest_bundled_rate():
+    assert tou_rate_for_datetime(dt("2022-10-31T12:00:00"), RATES) == 0.102
+
+
+
+def test_off_peak_rates_change_on_each_november_first():
+    assert tou_rate_for_datetime(dt("2024-10-31T04:00:00"), RATES) == 0.087
+    assert tou_rate_for_datetime(dt("2024-11-01T04:00:00"), RATES) == 0.076
+    assert tou_rate_for_datetime(dt("2025-10-31T04:00:00"), RATES) == 0.076
+    assert tou_rate_for_datetime(dt("2025-11-01T04:00:00"), RATES) == 0.098
+    assert tou_rate_for_datetime(dt("2026-10-31T04:00:00"), RATES) == 0.098
+    assert tou_rate_for_datetime(dt("2026-11-01T04:00:00"), RATES) == 0.091

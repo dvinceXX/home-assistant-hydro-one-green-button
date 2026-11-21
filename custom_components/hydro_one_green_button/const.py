@@ -6,6 +6,7 @@ CONF_FILE_PATH = "file_path"
 CONF_OFF_PEAK_RATE = "off_peak_rate"
 CONF_MID_PEAK_RATE = "mid_peak_rate"
 CONF_ON_PEAK_RATE = "on_peak_rate"
+CONF_RATE_EFFECTIVE_DATE = "rate_effective_date"
 DEFAULT_OFF_PEAK_RATE = 0.091
 DEFAULT_MID_PEAK_RATE = 0.146
 DEFAULT_ON_PEAK_RATE = 0.189

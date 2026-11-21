@@ -10,7 +10,7 @@ A HACS custom integration that imports electricity usage from Hydro One's Green 
 - Imports historical energy into Home Assistant external long-term statistics.
 - Imports a separate cumulative historical electricity-cost statistic for the Energy Dashboard.
 - Calculates Ontario TOU costs using each interval's local date/time, winter/summer schedule, weekends, and Ontario TOU holidays.
-- Lets you configure the three CAD/kWh rates in the integration's Configure options.
+- Lets you configure the three CAD/kWh rates and their effective date in the integration's Configure options.
 - Rebuilds both complete cumulative series when readings or configured rates change, so later exports can fill gaps in earlier partial days.
 - Does not store or use Hydro One credentials.
 
@@ -36,11 +36,19 @@ A HACS custom integration that imports electricity usage from Hydro One's Green 
 
 The cost statistic is cumulative and uses CAD as its unit. Home Assistant uses its changes to calculate daily, monthly, and yearly costs.
 
-## Ontario TOU defaults
+## Ontario TOU defaults and historical rates
 
-- Off-peak: **$0.091/kWh**
-- Mid-peak: **$0.146/kWh**
-- On-peak: **$0.189/kWh**
+The integration applies the Ontario Energy Board (OEB) Regulated Price Plan time-of-use rates that were effective on each reading's local date. The bundled historical schedule is:
+
+| Effective date | Off-peak | Mid-peak | On-peak |
+| --- | ---: | ---: | ---: |
+| November 1, 2022 | $0.074/kWh | $0.102/kWh | $0.151/kWh |
+| November 1, 2023 | $0.087/kWh | $0.122/kWh | $0.182/kWh |
+| November 1, 2024 | $0.076/kWh | $0.122/kWh | $0.158/kWh |
+| November 1, 2025 | $0.098/kWh | $0.157/kWh | $0.203/kWh |
+| November 1, 2026 | $0.091/kWh | $0.146/kWh | $0.189/kWh |
+
+The November 1, 2026 rates are the current defaults. Readings before November 1, 2022 use the earliest bundled rate set (November 2022); those older costs should be treated as estimates until earlier OEB schedules are added.
 
 Schedule:
 - Weekends and Ontario TOU statutory holidays: off-peak all day.
@@ -49,7 +57,11 @@ Schedule:
 
 Holiday dates include New Year's Day, Family Day, Good Friday, Victoria Day, Canada Day, Labour Day, Thanksgiving, Christmas Day, and Boxing Day. The Civic Holiday is not included. The integration uses Home Assistant's configured time zone for historical interval pricing.
 
-To change rates, open **Settings → Devices & services → Hydro One Green Button → Configure**.
+To configure rates for a future OEB change, open **Settings → Devices & services → Hydro One Green Button → Configure** and enter all three rates plus their effective date (normally November 1). Existing options without an effective date default to November 1, 2026.
+
+## Historical statistics correction
+
+On the first setup after this update, the integration clears and rebuilds only its own historical_energy and historical_cost statistics over the imported history range. This corrects the previous energy interval-end timestamps and recalculates historical costs using the effective-date rate schedule. Other Home Assistant statistics are not cleared. The one-time migration is recorded in the config entry so normal restarts do not repeat the cleanup.
 
 ## Important calculation details
 

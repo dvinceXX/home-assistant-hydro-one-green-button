@@ -23,12 +23,13 @@
     "step": {
       "init": {
         "title": "Hydro One XML source and TOU rates",
-        "description": "Enter the XML file or folder and your Ontario time-of-use electricity rates in CAD/kWh. Rates are used to calculate historical costs for every imported interval.",
+        "description": "Enter the XML file or folder and Ontario time-of-use rates in CAD/kWh. The selected rates are added to the effective-date schedule; bundled historical OEB rates remain in force for their listed periods.",
         "data": {
           "file_path": "XML file or folder path",
           "off_peak_rate": "Off-peak rate (CAD/kWh)",
           "mid_peak_rate": "Mid-peak rate (CAD/kWh)",
-          "on_peak_rate": "On-peak rate (CAD/kWh)"
+          "on_peak_rate": "On-peak rate (CAD/kWh)",
+          "rate_effective_date": "Effective date for these rates (YYYY-MM-DD)"
         }
       }
     },
