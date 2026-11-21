@@ -2,12 +2,16 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 
-from homeassistant.components.recorder.statistics import async_add_external_statistics
+from homeassistant.components.recorder.statistics import (
+    async_add_external_statistics,
+    clear_statistics_range,
+)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.helpers.recorder import get_instance
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import (
@@ -15,6 +19,7 @@ from .const import (
     CONF_MID_PEAK_RATE,
     CONF_OFF_PEAK_RATE,
     CONF_ON_PEAK_RATE,
+    CONF_RATE_EFFECTIVE_DATE,
     DEFAULT_MID_PEAK_RATE,
     DEFAULT_OFF_PEAK_RATE,
     DEFAULT_ON_PEAK_RATE,
@@ -28,11 +33,16 @@ from .green_button import (
     build_energy_statistics,
     parse_green_button_source,
 )
-from .pricing import build_cost_statistics
+from .pricing import DEFAULT_RATE_EFFECTIVE_DATE, build_cost_statistics
 
 _LOGGER = logging.getLogger(__name__)
 ENERGY_STATISTIC_ID = f"{DOMAIN}:historical_energy"
 COST_STATISTIC_ID = f"{DOMAIN}:historical_cost"
+
+# A one-time, persisted migration marker. The old energy points were stored at
+# interval end; the corrected series uses interval start. Cost is also rebuilt
+# so historical rates are corrected at the same time.
+_STATISTICS_MIGRATION_KEY = "historical_statistics_rebuilt_v1"
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -43,6 +53,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "mid_peak": float(entry.options.get(CONF_MID_PEAK_RATE, DEFAULT_MID_PEAK_RATE)),
         "on_peak": float(entry.options.get(CONF_ON_PEAK_RATE, DEFAULT_ON_PEAK_RATE)),
     }
+    rate_effective_date = datetime.strptime(
+        entry.options.get(
+            CONF_RATE_EFFECTIVE_DATE, DEFAULT_RATE_EFFECTIVE_DATE.isoformat()
+        ),
+        "%Y-%m-%d",
+    ).date()
     time_zone = hass.config.time_zone
     last_import_signature: tuple[tuple[datetime, int, float], ...] | None = None
 
@@ -62,13 +78,42 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if signature == last_import_signature:
             return data
 
-        # Rebuild both complete cumulative series whenever source data changes.
-        # This also allows a later export to fill gaps in an earlier partial day.
         try:
             energy_statistics = build_energy_statistics(data.readings)
             cost_statistics = await hass.async_add_executor_job(
-                build_cost_statistics, data.readings, rates, time_zone
+                build_cost_statistics,
+                data.readings,
+                rates,
+                time_zone,
+                rate_effective_date,
             )
+
+            if not entry.data.get(_STATISTICS_MIGRATION_KEY):
+                # Clear only the two Hydro One series, and only over the
+                # imported history. The extra margin catches the old
+                # interval-end timestamps and the cost series' hour-end rows.
+                first_reading = data.readings[0]
+                last_reading = data.readings[-1]
+                cleanup_start = first_reading.start - timedelta(days=1)
+                cleanup_end = (
+                    last_reading.start
+                    + timedelta(seconds=last_reading.duration_seconds)
+                    + timedelta(days=1)
+                )
+                await hass.async_add_executor_job(
+                    clear_statistics_range,
+                    get_instance(hass),
+                    [ENERGY_STATISTIC_ID, COST_STATISTIC_ID],
+                    cleanup_start,
+                    cleanup_end,
+                )
+                _LOGGER.info(
+                    "Cleared legacy Hydro One statistics from %s through %s "
+                    "before rebuilding corrected energy and cost history",
+                    cleanup_start,
+                    cleanup_end,
+                )
+
             async_add_external_statistics(
                 hass,
                 {
@@ -97,6 +142,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 },
                 cost_statistics,
             )
+
+            if not entry.data.get(_STATISTICS_MIGRATION_KEY):
+                hass.config_entries.async_update_entry(
+                    entry,
+                    data={**entry.data, _STATISTICS_MIGRATION_KEY: True},
+                )
+
             last_import_signature = signature
             _LOGGER.info(
                 "Submitted %d Hydro One interval readings, %d energy statistics "
