@@ -260,15 +260,20 @@ def build_energy_statistics(
     cumulative_kwh = round(initial_sum_kwh, 6)
     statistics: list[dict[str, object]] = []
     if include_baseline:
+        # Home Assistant's statistic start is the beginning of the period.
+        # Place the zero baseline one interval before the first reading so it
+        # does not collide with the first interval's statistic.
         statistics.append({
-            "start": readings[0].start,
+            "start": readings[0].start - timedelta(seconds=readings[0].duration_seconds),
             "state": cumulative_kwh,
             "sum": cumulative_kwh,
         })
     for reading in readings:
         cumulative_kwh = round(cumulative_kwh + reading.energy_kwh, 6)
         statistics.append({
-            "start": reading.start + timedelta(seconds=reading.duration_seconds),
+            # The sum includes this interval, but the statistic belongs to
+            # the interval beginning at reading.start, not its end.
+            "start": reading.start,
             "state": cumulative_kwh,
             "sum": cumulative_kwh,
         })
