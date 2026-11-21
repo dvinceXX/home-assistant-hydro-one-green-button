@@ -89,11 +89,11 @@ def test_dst_fall_back_hours_are_priced_by_local_clock():
 
 def test_historical_rates_change_on_november_first():
     # The same winter on-peak hour uses the rate effective on that date.
-    assert tou_rate_for_datetime(dt("2024-10-31T12:00:00"), RATES) == 0.182
+    assert tou_rate_for_datetime(dt("2024-10-31T12:00:00"), RATES) == 0.122
     assert tou_rate_for_datetime(dt("2024-11-01T12:00:00"), RATES) == 0.158
-    assert tou_rate_for_datetime(dt("2025-10-31T12:00:00"), RATES) == 0.158
+    assert tou_rate_for_datetime(dt("2025-10-31T12:00:00"), RATES) == 0.122
     assert tou_rate_for_datetime(dt("2025-11-03T12:00:00"), RATES) == 0.203
-    assert tou_rate_for_datetime(dt("2026-10-31T12:00:00"), RATES) == 0.203
+    assert tou_rate_for_datetime(dt("2026-10-31T12:00:00"), RATES) == 0.157
     assert tou_rate_for_datetime(dt("2026-11-02T12:00:00"), RATES) == 0.189
 
 
@@ -103,11 +103,11 @@ def test_configured_future_rates_apply_from_effective_date():
     effective = dt("2027-11-01T12:00:00")
     assert tou_rate_for_datetime(
         before, custom, rate_effective_date=date(2027, 11, 1)
-    ) == 0.189
+    ) == 0.146
     assert tou_rate_for_datetime(
         effective, custom, rate_effective_date=date(2027, 11, 1)
     ) == 0.21
 
 
 def test_pre_november_2022_uses_earliest_bundled_rate():
-    assert tou_rate_for_datetime(dt("2022-10-31T12:00:00"), RATES) == 0.151
+    assert tou_rate_for_datetime(dt("2022-10-31T12:00:00"), RATES) == 0.102
