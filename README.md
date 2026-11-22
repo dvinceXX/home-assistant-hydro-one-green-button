@@ -6,7 +6,8 @@ A HACS custom integration that imports electricity usage from Hydro One's Green 
 
 - Reads a Green Button XML file or scans a dedicated folder of XML exports every 15 minutes.
 - Normalizes interval energy to kWh and deduplicates overlapping exports.
-- Exposes sensors for latest interval energy, imported energy total, latest reading time, and imported interval count.
+- Exposes sensors for latest interval energy, imported energy total, latest reading time, imported interval count, and current Ontario TOU rate.
+- Records the scheduled TOU rate as a Home Assistant measurement sensor with long-term statistics, suitable for an hourly rate graph.
 - Imports historical energy into Home Assistant external long-term statistics.
 - Imports a separate cumulative historical electricity-cost statistic for the Energy Dashboard.
 - Calculates Ontario TOU costs using each interval's local date/time, winter/summer schedule, weekends, and Ontario TOU holidays.
@@ -26,6 +27,26 @@ A HACS custom integration that imports electricity usage from Hydro One's Green 
 2. Copy the XML export(s) into a folder accessible to Home Assistant, for example `/config/hydro-one-xml/`.
 3. Add **Hydro One Green Button** from **Settings → Devices & services** and enter that folder path. Existing single-file configuration remains supported.
 4. Keep older XML exports in the folder; overlapping intervals are deduplicated and the complete history is rebuilt when new files arrive.
+
+## Hourly TOU rate graph
+
+The integration exposes `sensor.hydro_one_tou_rate`, which reports the currently scheduled Ontario TOU price in CAD/kWh. It uses the same rate schedule, configured effective date, local time zone, weekends, and holidays as the cost calculator. The sensor updates at each local clock-hour boundary and records Home Assistant long-term statistics automatically.
+
+Add this Lovelace card for the last 24 hours:
+
+```yaml
+type: statistics-graph
+title: Hydro One - Hourly TOU Rate
+chart_type: line
+period: hour
+days_to_show: 1
+stat_types:
+  - mean
+entities:
+  - sensor.hydro_one_tou_rate
+```
+
+The graph begins collecting history after the sensor is installed; it does not backfill the previous 24 hours.
 
 ## Energy Dashboard cost setup
 
