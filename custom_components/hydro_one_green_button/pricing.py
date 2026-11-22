@@ -1,4 +1,4 @@
-"""Ontario time-of-use pricing for Hydro One interval readings."""
+"""Ontario TOU, ULO and residential Tiered electricity pricing."""
 from __future__ import annotations
 
 from collections import defaultdict
@@ -9,38 +9,53 @@ from zoneinfo import ZoneInfo
 if TYPE_CHECKING:
     from .green_button import IntervalReading
 
-DEFAULT_OFF_PEAK_RATE = 0.091
-DEFAULT_MID_PEAK_RATE = 0.146
-DEFAULT_ON_PEAK_RATE = 0.189
+PLAN_TOU = "tou"
+PLAN_ULO = "ulo"
+PLAN_TIERED = "tiered"
+DEFAULT_PRICING_PLAN = PLAN_TOU
 DEFAULT_RATE_EFFECTIVE_DATE = date(2026, 11, 1)
 
-# Ontario Energy Board Regulated Price Plan TOU prices, in CAD/kWh.
-# Each set takes effect on November 1 and remains in force until the next
-# November 1 price change.
-HISTORICAL_RATE_SCHEDULE: tuple[tuple[date, dict[str, float]], ...] = (
-    (date(2022, 11, 1), {"off_peak": 0.074, "mid_peak": 0.102, "on_peak": 0.151}),
-    (date(2023, 11, 1), {"off_peak": 0.087, "mid_peak": 0.122, "on_peak": 0.182}),
-    (date(2024, 11, 1), {"off_peak": 0.076, "mid_peak": 0.122, "on_peak": 0.158}),
-    (date(2025, 11, 1), {"off_peak": 0.098, "mid_peak": 0.157, "on_peak": 0.203}),
-    (date(2026, 11, 1), {"off_peak": 0.091, "mid_peak": 0.146, "on_peak": 0.189}),
+# Rates are CAD/kWh. OEB historical schedules; effective dates are November 1
+# except the initial ULO launch in May 2023.
+TOU_RATE_SCHEDULE = (
+    (date(2022, 11, 1), {"off_peak": .074, "mid_peak": .102, "on_peak": .151}),
+    (date(2023, 11, 1), {"off_peak": .087, "mid_peak": .122, "on_peak": .182}),
+    (date(2024, 11, 1), {"off_peak": .076, "mid_peak": .122, "on_peak": .158}),
+    (date(2025, 11, 1), {"off_peak": .098, "mid_peak": .157, "on_peak": .203}),
+    (date(2026, 11, 1), {"off_peak": .091, "mid_peak": .146, "on_peak": .189}),
 )
+ULO_RATE_SCHEDULE = (
+    (date(2023, 5, 1), {"overnight": .024, "weekend_off_peak": .074, "mid_peak": .102, "on_peak": .240}),
+    (date(2023, 11, 1), {"overnight": .028, "weekend_off_peak": .087, "mid_peak": .122, "on_peak": .286}),
+    (date(2024, 11, 1), {"overnight": .028, "weekend_off_peak": .076, "mid_peak": .122, "on_peak": .284}),
+    (date(2025, 11, 1), {"overnight": .039, "weekend_off_peak": .098, "mid_peak": .157, "on_peak": .391}),
+    (date(2026, 11, 1), {"overnight": .037, "weekend_off_peak": .091, "mid_peak": .146, "on_peak": .377}),
+)
+TIERED_RATE_SCHEDULE = (
+    (date(2022, 11, 1), {"tier1": .087, "tier2": .103}),
+    (date(2023, 11, 1), {"tier1": .103, "tier2": .125}),
+    (date(2024, 11, 1), {"tier1": .093, "tier2": .110}),
+    (date(2025, 11, 1), {"tier1": .120, "tier2": .142}),
+    (date(2026, 11, 1), {"tier1": .112, "tier2": .132}),
+)
+
+DEFAULT_TOU_RATES = {"off_peak": .091, "mid_peak": .146, "on_peak": .189}
+DEFAULT_ULO_RATES = {"overnight": .037, "weekend_off_peak": .091, "mid_peak": .146, "on_peak": .377}
+DEFAULT_TIERED_RATES = {"tier1": .112, "tier2": .132}
 
 
 def _nth_weekday(year: int, month: int, weekday: int, occurrence: int) -> date:
-    """Return the nth weekday in a month (Monday=0)."""
     first = date(year, month, 1)
     return first + timedelta(days=(weekday - first.weekday()) % 7 + 7 * (occurrence - 1))
 
 
 def _last_weekday(year: int, month: int, weekday: int) -> date:
-    """Return the last weekday in a month."""
     first_next = date(year + 1, 1, 1) if month == 12 else date(year, month + 1, 1)
     last = first_next - timedelta(days=1)
     return last - timedelta(days=(last.weekday() - weekday) % 7)
 
 
 def _easter_sunday(year: int) -> date:
-    """Calculate Gregorian Easter Sunday."""
     a = year % 19
     b, c = divmod(year, 100)
     d, e = divmod(b, 4)
@@ -56,64 +71,48 @@ def _easter_sunday(year: int) -> date:
 
 
 def ontario_tou_holidays(year: int) -> set[date]:
-    """Ontario TOU holidays used by the OEB; Civic Holiday is not included."""
+    """Ontario OEB TOU/ULO holidays, including Civic Holiday."""
     easter = _easter_sunday(year)
-    return {
-        date(year, 1, 1),
-        _nth_weekday(year, 2, 0, 3),
-        easter - timedelta(days=2),
-        _last_weekday(year, 5, 0),
-        date(year, 7, 1),
-        _nth_weekday(year, 9, 0, 1),
-        _nth_weekday(year, 10, 0, 2),
-        date(year, 12, 25),
-        date(year, 12, 26),
+    holidays = {
+        date(year, 1, 1), _nth_weekday(year, 2, 0, 3),
+        easter - timedelta(days=2), _last_weekday(year, 5, 0),
+        date(year, 7, 1), _nth_weekday(year, 8, 0, 1),
+        _nth_weekday(year, 9, 0, 1), _nth_weekday(year, 10, 0, 2),
+        date(year, 12, 25), date(year, 12, 26),
     }
+    # When a listed holiday falls on a weekend, the following Monday is
+    # observed for TOU/ULO holiday pricing.
+    observed = set(holidays)
+    for holiday in holidays:
+        if holiday.weekday() == 5:
+            observed.add(holiday + timedelta(days=2))
+        elif holiday.weekday() == 6:
+            observed.add(holiday + timedelta(days=1))
+    return observed
 
 
-def _rates_for_date(
-    local_date: date,
-    rates: dict[str, float] | None,
-    rate_effective_date: date,
-) -> dict[str, float]:
-    """Select the latest OEB rate set effective on or before a local date.
-
-    The configurable rates replace the schedule entry on rate_effective_date.
-    Dates earlier than the first bundled schedule use the earliest bundled
-    rates rather than incorrectly applying today's prices to old readings.
-    """
-    configured_rates = rates or {
-        "off_peak": DEFAULT_OFF_PEAK_RATE,
-        "mid_peak": DEFAULT_MID_PEAK_RATE,
-        "on_peak": DEFAULT_ON_PEAK_RATE,
-    }
-    schedule = dict(HISTORICAL_RATE_SCHEDULE)
-    schedule[rate_effective_date] = {
-        key: float(value) for key, value in configured_rates.items()
-    }
-    effective_dates = sorted(schedule)
-    selected = schedule[effective_dates[0]]
-    for effective in effective_dates:
+def _scheduled_rates(local_date: date, schedule, configured: dict[str, float] | None,
+                     effective_date: date) -> dict[str, float]:
+    entries = dict(schedule)
+    if configured:
+        entries[effective_date] = {key: float(value) for key, value in configured.items()}
+    selected_date = min(entries)
+    for effective in sorted(entries):
         if effective > local_date:
             break
-        selected = schedule[effective]
-    return selected
+        selected_date = effective
+    return entries[selected_date]
 
 
-def tou_rate_for_datetime(
-    instant: datetime,
-    rates: dict[str, float] | None = None,
-    time_zone: str = "America/Toronto",
-    rate_effective_date: date = DEFAULT_RATE_EFFECTIVE_DATE,
-) -> float:
-    """Return the Ontario TOU price for an aware instant."""
+def tou_rate_for_datetime(instant: datetime, rates: dict[str, float] | None = None,
+                          time_zone: str = "America/Toronto",
+                          rate_effective_date: date = DEFAULT_RATE_EFFECTIVE_DATE) -> float:
     if instant.tzinfo is None:
-        raise ValueError("TOU pricing requires a timezone-aware datetime")
+        raise ValueError("Pricing requires a timezone-aware datetime")
     local = instant.astimezone(ZoneInfo(time_zone))
-    prices = _rates_for_date(local.date(), rates, rate_effective_date)
+    prices = _scheduled_rates(local.date(), TOU_RATE_SCHEDULE, rates, rate_effective_date)
     if local.weekday() >= 5 or local.date() in ontario_tou_holidays(local.year):
         return float(prices["off_peak"])
-
     hour = local.hour
     winter = local.month <= 4 or local.month >= 11
     if 7 <= hour < 11:
@@ -127,21 +126,88 @@ def tou_rate_for_datetime(
     return float(prices[period])
 
 
-def build_cost_statistics(
-    readings: tuple[IntervalReading, ...],
-    rates: dict[str, float] | None = None,
-    time_zone: str = "America/Toronto",
-    rate_effective_date: date = DEFAULT_RATE_EFFECTIVE_DATE,
-) -> list[dict[str, object]]:
-    """Build cumulative CAD cost statistics grouped into UTC hourly periods.
+def ulo_rate_for_datetime(instant: datetime, rates: dict[str, float] | None = None,
+                          time_zone: str = "America/Toronto",
+                          rate_effective_date: date = DEFAULT_RATE_EFFECTIVE_DATE) -> float:
+    if instant.tzinfo is None:
+        raise ValueError("Pricing requires a timezone-aware datetime")
+    local = instant.astimezone(ZoneInfo(time_zone))
+    prices = _scheduled_rates(local.date(), ULO_RATE_SCHEDULE, rates, rate_effective_date)
+    if local.hour >= 23 or local.hour < 7:
+        return float(prices["overnight"])
+    if local.weekday() >= 5 or local.date() in ontario_tou_holidays(local.year):
+        return float(prices["weekend_off_peak"])
+    if 16 <= local.hour < 21:
+        return float(prices["on_peak"])
+    return float(prices["mid_peak"])
 
-    Energy is apportioned evenly across each interval. Ontario's TOU boundaries
-    occur on local whole hours, which align with UTC hour boundaries.
-    """
+
+def tiered_threshold(local_date: date) -> float:
+    """Residential monthly Tier 1 threshold, kWh."""
+    return 1000.0 if local_date.month >= 11 or local_date.month <= 4 else 600.0
+
+
+def _tiered_prices(local_date: date, rates: dict[str, float] | None,
+                   rate_effective_date: date) -> dict[str, float]:
+    return _scheduled_rates(local_date, TIERED_RATE_SCHEDULE, rates, rate_effective_date)
+
+
+def _build_tiered_costs(readings, rates, time_zone, rate_effective_date):
+    """Price chronologically against each calendar month's residential threshold."""
+    zone = ZoneInfo(time_zone)
+    monthly_usage: dict[tuple[int, int], float] = defaultdict(float)
+    hourly_costs: dict[datetime, float] = defaultdict(float)
+    for reading in sorted(readings, key=lambda item: item.start):
+        cursor = reading.start.astimezone(UTC)
+        end = cursor + timedelta(seconds=reading.duration_seconds)
+        while cursor < end:
+            local = cursor.astimezone(zone)
+            hour_start = cursor.replace(minute=0, second=0, microsecond=0)
+            next_hour = hour_start + timedelta(hours=1)
+            local_month_end = datetime.combine(
+                (local.date().replace(day=28) + timedelta(days=4)).replace(day=1),
+                datetime.min.time(), tzinfo=zone
+            ).astimezone(UTC)
+            segment_end = min(end, next_hour, local_month_end)
+            seconds = (segment_end - cursor).total_seconds()
+            energy = reading.energy_kwh * seconds / reading.duration_seconds
+            month_key = (local.year, local.month)
+            used = monthly_usage[month_key]
+            threshold = tiered_threshold(local.date())
+            tier1_energy = min(energy, max(0.0, threshold - used))
+            tier2_energy = energy - tier1_energy
+            prices = _tiered_prices(local.date(), rates, rate_effective_date)
+            hourly_costs[hour_start] += tier1_energy * prices["tier1"] + tier2_energy * prices["tier2"]
+            monthly_usage[month_key] += energy
+            cursor = segment_end
+    return hourly_costs
+
+
+def _statistics_from_hourly_costs(hourly_costs: dict[datetime, float]) -> list[dict[str, object]]:
+    if not hourly_costs:
+        return []
+    first_hour = min(hourly_costs)
+    cumulative = 0.0
+    result: list[dict[str, object]] = [{"start": first_hour, "state": 0.0, "sum": 0.0}]
+    for hour in sorted(hourly_costs):
+        cumulative = round(cumulative + hourly_costs[hour], 6)
+        result.append({"start": hour + timedelta(hours=1), "state": cumulative, "sum": cumulative})
+    return result
+
+
+def build_cost_statistics(readings, rates: dict[str, float] | None = None,
+                          time_zone: str = "America/Toronto",
+                          rate_effective_date: date = DEFAULT_RATE_EFFECTIVE_DATE,
+                          pricing_plan: str = PLAN_TOU) -> list[dict[str, object]]:
+    """Build cumulative CAD cost statistics for the selected Ontario plan."""
     if not readings:
         return []
-
+    if pricing_plan == PLAN_TIERED:
+        return _statistics_from_hourly_costs(
+            _build_tiered_costs(readings, rates, time_zone, rate_effective_date)
+        )
     hourly_costs: dict[datetime, float] = defaultdict(float)
+    rate_function = ulo_rate_for_datetime if pricing_plan == PLAN_ULO else tou_rate_for_datetime
     for reading in readings:
         start = reading.start.astimezone(UTC)
         end = start + timedelta(seconds=reading.duration_seconds)
@@ -151,23 +217,39 @@ def build_cost_statistics(
             segment_end = min(end, hour_start + timedelta(hours=1))
             seconds = (segment_end - cursor).total_seconds()
             energy = reading.energy_kwh * seconds / reading.duration_seconds
-            hourly_costs[hour_start] += energy * tou_rate_for_datetime(
-                cursor, rates, time_zone, rate_effective_date
-            )
+            hourly_costs[hour_start] += energy * rate_function(cursor, rates, time_zone, rate_effective_date)
             cursor = segment_end
+    return _statistics_from_hourly_costs(hourly_costs)
 
-    first_hour = min(hourly_costs)
-    cumulative_cost = 0.0
-    statistics: list[dict[str, object]] = [{
-        "start": first_hour,
-        "state": cumulative_cost,
-        "sum": cumulative_cost,
-    }]
-    for hour_start in sorted(hourly_costs):
-        cumulative_cost = round(cumulative_cost + hourly_costs[hour_start], 6)
-        statistics.append({
-            "start": hour_start + timedelta(hours=1),
-            "state": cumulative_cost,
-            "sum": cumulative_cost,
-        })
-    return statistics
+
+def tiered_rate_for_usage(
+    instant: datetime,
+    monthly_usage_kwh: float,
+    rates: dict[str, float] | None = None,
+    time_zone: str = "America/Toronto",
+    rate_effective_date: date = DEFAULT_RATE_EFFECTIVE_DATE,
+) -> float:
+    """Return the current marginal residential Tiered rate for month-to-date use."""
+    if instant.tzinfo is None:
+        raise ValueError("Pricing requires a timezone-aware datetime")
+    local_date = instant.astimezone(ZoneInfo(time_zone)).date()
+    prices = _tiered_prices(local_date, rates, rate_effective_date)
+    return float(prices["tier1"] if monthly_usage_kwh < tiered_threshold(local_date) else prices["tier2"])
+
+
+def rate_for_datetime(
+    instant: datetime,
+    pricing_plan: str,
+    rates: dict[str, float] | None = None,
+    time_zone: str = "America/Toronto",
+    rate_effective_date: date = DEFAULT_RATE_EFFECTIVE_DATE,
+    monthly_usage_kwh: float = 0.0,
+) -> float:
+    """Return the applicable scheduled or marginal rate for a selected plan."""
+    if pricing_plan == PLAN_ULO:
+        return ulo_rate_for_datetime(instant, rates, time_zone, rate_effective_date)
+    if pricing_plan == PLAN_TIERED:
+        return tiered_rate_for_usage(
+            instant, monthly_usage_kwh, rates, time_zone, rate_effective_date
+        )
+    return tou_rate_for_datetime(instant, rates, time_zone, rate_effective_date)

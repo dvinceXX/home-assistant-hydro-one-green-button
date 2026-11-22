@@ -36,7 +36,7 @@ Add this Lovelace card for the last 24 hours:
 
 ```yaml
 type: statistics-graph
-title: Hydro One - Hourly TOU Rate
+title: Hydro One - Hourly Electricity Rate
 chart_type: line
 period: hour
 days_to_show: 1
@@ -57,7 +57,7 @@ The graph begins collecting history after the sensor is installed; it does not b
 
 The cost statistic is cumulative and uses CAD as its unit. Home Assistant uses its changes to calculate daily, monthly, and yearly costs.
 
-## Ontario TOU defaults and historical rates
+## Ontario electricity pricing plans\n\nThe pricing-plan selector defaults to **Time-of-Use (TOU)** to preserve existing installations. Select **Ultra-Low Overnight (ULO)** or **Tiered (residential)** from the integration's Configure options when those match your Hydro One account.\n\n- **TOU:** weekday on-, mid- and off-peak periods change between summer (May–October) and winter (November–April); weekends and OEB holidays are off-peak all day.\n- **ULO:** every day 11 p.m.–7 a.m. is ultra-low overnight; weekdays 7 a.m.–4 p.m. and 9 p.m.–11 p.m. are mid-peak; weekdays 4 p.m.–9 p.m. are on-peak; weekends and OEB holidays 7 a.m.–11 p.m. are weekend off-peak.\n- **Tiered (residential):** Tier 1 applies to the first 1,000 kWh per calendar month in winter and 600 kWh in summer; additional monthly usage is Tier 2. Usage is accumulated chronologically from the imported intervals. Accurate Tiered cost history requires the import to include the full month's intervals from the first day; missing early-month intervals can understate Tier 2 usage.\n\nCurrent OEB residential rates effective November 1, 2026 are TOU 9.1¢/14.6¢/18.9¢, ULO 3.7¢/9.1¢/14.6¢/37.7¢, and Tiered 11.2¢/13.2¢. The integration includes historical rate schedules for each plan. OEB rates are set annually on November 1; update the configured rate values and effective date when the OEB publishes a new schedule. The integration cannot know future rates before publication. Tiered thresholds switch automatically on May 1 and November 1.\n\n## Ontario TOU defaults and historical rates
 
 The integration applies the Ontario Energy Board (OEB) Regulated Price Plan time-of-use rates that were effective on each reading's local date. The bundled historical schedule is:
 
@@ -76,9 +76,9 @@ Schedule:
 - November–April: 7–11 a.m. on-peak, 11 a.m.–5 p.m. mid-peak, 5–7 p.m. on-peak, otherwise off-peak.
 - May–October: 7–11 a.m. mid-peak, 11 a.m.–5 p.m. on-peak, 5–7 p.m. mid-peak, otherwise off-peak.
 
-Holiday dates include New Year's Day, Family Day, Good Friday, Victoria Day, Canada Day, Labour Day, Thanksgiving, Christmas Day, and Boxing Day. The Civic Holiday is not included. The integration uses Home Assistant's configured time zone for historical interval pricing.
+Holiday dates include New Year's Day, Family Day, Good Friday, Victoria Day, Canada Day, Civic Holiday, Labour Day, Thanksgiving, Christmas Day, and Boxing Day. When a listed holiday falls on a weekend, the following Monday is treated as the observed holiday. The integration uses Home Assistant's configured time zone for historical interval pricing.
 
-To configure rates for a future OEB change, open **Settings → Devices & services → Hydro One Green Button → Configure** and enter all three rates plus their effective date (normally November 1). Existing options without an effective date default to November 1, 2026.
+To configure rates for a future OEB change, open **Settings → Devices & services → Hydro One Green Button → Configure** and enter the rates for your selected plan plus their effective date (normally November 1). Existing options without a plan selection default to TOU.
 
 ## Historical statistics correction
 
@@ -94,4 +94,4 @@ On the first setup after this update, the integration clears and rebuilds only i
 
 ## Development
 
-The XML parser is in `green_button.py`, TOU pricing is in `pricing.py`, and parser/pricing tests are in `tests/`. Run `pytest -q` in the repository's test environment.
+The XML parser is in `green_button.py`, TOU, ULO and residential Tiered pricing are in `pricing.py`, and parser/pricing tests are in `tests/`. Run `pytest -q` in the repository's test environment.

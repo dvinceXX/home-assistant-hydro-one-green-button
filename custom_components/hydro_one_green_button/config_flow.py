@@ -8,18 +8,15 @@ from homeassistant import config_entries
 from homeassistant.config_entries import ConfigEntry
 
 from .const import (
-    CONF_FILE_PATH,
-    CONF_MID_PEAK_RATE,
-    CONF_OFF_PEAK_RATE,
-    CONF_ON_PEAK_RATE,
-    CONF_RATE_EFFECTIVE_DATE,
-    DEFAULT_MID_PEAK_RATE,
-    DEFAULT_OFF_PEAK_RATE,
-    DEFAULT_ON_PEAK_RATE,
-    DOMAIN,
+    CONF_FILE_PATH, CONF_PRICING_PLAN, CONF_OFF_PEAK_RATE, CONF_MID_PEAK_RATE,
+    CONF_ON_PEAK_RATE, CONF_ULO_OVERNIGHT_RATE, CONF_ULO_WEEKEND_RATE,
+    CONF_TIER1_RATE, CONF_TIER2_RATE, CONF_RATE_EFFECTIVE_DATE,
+    DEFAULT_OFF_PEAK_RATE, DEFAULT_MID_PEAK_RATE, DEFAULT_ON_PEAK_RATE,
+    DEFAULT_ULO_OVERNIGHT_RATE, DEFAULT_ULO_WEEKEND_RATE,
+    DEFAULT_TIER1_RATE, DEFAULT_TIER2_RATE, DOMAIN,
 )
 from .green_button import GreenButtonParseError, parse_green_button_source
-from .pricing import DEFAULT_RATE_EFFECTIVE_DATE
+from .pricing import DEFAULT_RATE_EFFECTIVE_DATE, PLAN_TOU, PLAN_ULO, PLAN_TIERED
 
 
 def _validate_effective_date(value: str) -> str:
@@ -42,9 +39,7 @@ class HydroOneGreenButtonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             source_path = user_input[CONF_FILE_PATH].strip()
             try:
-                await self.hass.async_add_executor_job(
-                    parse_green_button_source, source_path
-                )
+                await self.hass.async_add_executor_job(parse_green_button_source, source_path)
             except FileNotFoundError:
                 errors["base"] = "file_not_found"
             except PermissionError:
@@ -55,10 +50,8 @@ class HydroOneGreenButtonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 await self.async_set_unique_id(source_path)
                 self._abort_if_unique_id_configured()
                 return self.async_create_entry(
-                    title="Hydro One Green Button",
-                    data={CONF_FILE_PATH: source_path},
+                    title="Hydro One Green Button", data={CONF_FILE_PATH: source_path}
                 )
-
         return self.async_show_form(
             step_id="user",
             data_schema=vol.Schema({vol.Required(CONF_FILE_PATH): str}),
@@ -73,17 +66,15 @@ class HydroOneGreenButtonConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 
 class HydroOneGreenButtonOptionsFlow(config_entries.OptionsFlow):
-    """Allow changing the source path, TOU prices, and their effective date."""
+    """Configure the XML source, Ontario pricing plan and plan rates."""
 
     async def async_step_init(self, user_input: dict | None = None):
-        """Choose a new XML source path and TOU rates."""
+        """Choose a source path and electricity pricing plan."""
         errors: dict[str, str] = {}
         if user_input is not None:
             source_path = user_input[CONF_FILE_PATH].strip()
             try:
-                await self.hass.async_add_executor_job(
-                    parse_green_button_source, source_path
-                )
+                await self.hass.async_add_executor_job(parse_green_button_source, source_path)
             except FileNotFoundError:
                 errors["base"] = "file_not_found"
             except PermissionError:
@@ -91,47 +82,42 @@ class HydroOneGreenButtonOptionsFlow(config_entries.OptionsFlow):
             except (OSError, GreenButtonParseError):
                 errors["base"] = "invalid_file"
             else:
-                return self.async_create_entry(title="", data={
-                    CONF_FILE_PATH: source_path,
-                    CONF_OFF_PEAK_RATE: float(user_input[CONF_OFF_PEAK_RATE]),
-                    CONF_MID_PEAK_RATE: float(user_input[CONF_MID_PEAK_RATE]),
-                    CONF_ON_PEAK_RATE: float(user_input[CONF_ON_PEAK_RATE]),
-                    CONF_RATE_EFFECTIVE_DATE: user_input[CONF_RATE_EFFECTIVE_DATE],
-                })
+                values = {key: value for key, value in user_input.items()}
+                values[CONF_FILE_PATH] = source_path
+                for key in (
+                    CONF_OFF_PEAK_RATE, CONF_MID_PEAK_RATE, CONF_ON_PEAK_RATE,
+                    CONF_ULO_OVERNIGHT_RATE, CONF_ULO_WEEKEND_RATE,
+                    CONF_TIER1_RATE, CONF_TIER2_RATE,
+                ):
+                    values[key] = float(values[key])
+                return self.async_create_entry(title="", data=values)
 
-        current_path = self.config_entry.options.get(
-            CONF_FILE_PATH, self.config_entry.data[CONF_FILE_PATH]
-        )
-        return self.async_show_form(
-            step_id="init",
-            data_schema=vol.Schema({
-                vol.Required(CONF_FILE_PATH, default=current_path): str,
-                vol.Required(
-                    CONF_OFF_PEAK_RATE,
-                    default=self.config_entry.options.get(
-                        CONF_OFF_PEAK_RATE, DEFAULT_OFF_PEAK_RATE
-                    ),
-                ): vol.All(vol.Coerce(float), vol.Range(min=0)),
-                vol.Required(
-                    CONF_MID_PEAK_RATE,
-                    default=self.config_entry.options.get(
-                        CONF_MID_PEAK_RATE, DEFAULT_MID_PEAK_RATE
-                    ),
-                ): vol.All(vol.Coerce(float), vol.Range(min=0)),
-                vol.Required(
-                    CONF_ON_PEAK_RATE,
-                    default=self.config_entry.options.get(
-                        CONF_ON_PEAK_RATE, DEFAULT_ON_PEAK_RATE
-                    ),
-                ): vol.All(vol.Coerce(float), vol.Range(min=0)),
-                vol.Required(
-                    CONF_RATE_EFFECTIVE_DATE,
-                    default=self.config_entry.options.get(
-                        CONF_RATE_EFFECTIVE_DATE,
-                        DEFAULT_RATE_EFFECTIVE_DATE.isoformat(),
-                    ),
-                ): vol.All(str, _validate_effective_date),
+        options = self.config_entry.options
+        schema = vol.Schema({
+            vol.Required(
+                CONF_FILE_PATH,
+                default=options.get(CONF_FILE_PATH, self.config_entry.data[CONF_FILE_PATH]),
+            ): str,
+            vol.Required(
+                CONF_PRICING_PLAN, default=options.get(CONF_PRICING_PLAN, PLAN_TOU)
+            ): vol.In({
+                PLAN_TOU: "Time-of-Use (TOU)",
+                PLAN_ULO: "Ultra-Low Overnight (ULO)",
+                PLAN_TIERED: "Tiered (residential)",
             }),
-            errors=errors,
+            vol.Required(CONF_OFF_PEAK_RATE, default=options.get(CONF_OFF_PEAK_RATE, DEFAULT_OFF_PEAK_RATE)): vol.All(vol.Coerce(float), vol.Range(min=0)),
+            vol.Required(CONF_MID_PEAK_RATE, default=options.get(CONF_MID_PEAK_RATE, DEFAULT_MID_PEAK_RATE)): vol.All(vol.Coerce(float), vol.Range(min=0)),
+            vol.Required(CONF_ON_PEAK_RATE, default=options.get(CONF_ON_PEAK_RATE, DEFAULT_ON_PEAK_RATE)): vol.All(vol.Coerce(float), vol.Range(min=0)),
+            vol.Required(CONF_ULO_OVERNIGHT_RATE, default=options.get(CONF_ULO_OVERNIGHT_RATE, DEFAULT_ULO_OVERNIGHT_RATE)): vol.All(vol.Coerce(float), vol.Range(min=0)),
+            vol.Required(CONF_ULO_WEEKEND_RATE, default=options.get(CONF_ULO_WEEKEND_RATE, DEFAULT_ULO_WEEKEND_RATE)): vol.All(vol.Coerce(float), vol.Range(min=0)),
+            vol.Required(CONF_TIER1_RATE, default=options.get(CONF_TIER1_RATE, DEFAULT_TIER1_RATE)): vol.All(vol.Coerce(float), vol.Range(min=0)),
+            vol.Required(CONF_TIER2_RATE, default=options.get(CONF_TIER2_RATE, DEFAULT_TIER2_RATE)): vol.All(vol.Coerce(float), vol.Range(min=0)),
+            vol.Required(
+                CONF_RATE_EFFECTIVE_DATE,
+                default=options.get(CONF_RATE_EFFECTIVE_DATE, DEFAULT_RATE_EFFECTIVE_DATE.isoformat()),
+            ): vol.All(str, _validate_effective_date),
+        })
+        return self.async_show_form(
+            step_id="init", data_schema=schema, errors=errors,
             description_placeholders={"example_path": "/config/hydro-one-xml"},
         )

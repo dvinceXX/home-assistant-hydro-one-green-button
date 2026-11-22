@@ -22,6 +22,12 @@ PRICING_SPEC.loader.exec_module(PRICING)
 IntervalReading = PARSER.IntervalReading
 build_cost_statistics = PRICING.build_cost_statistics
 tou_rate_for_datetime = PRICING.tou_rate_for_datetime
+ulo_rate_for_datetime = PRICING.ulo_rate_for_datetime
+tiered_rate_for_usage = PRICING.tiered_rate_for_usage
+tiered_threshold = PRICING.tiered_threshold
+PLAN_TOU = PRICING.PLAN_TOU
+PLAN_ULO = PRICING.PLAN_ULO
+PLAN_TIERED = PRICING.PLAN_TIERED
 
 RATES = {"off_peak": 0.091, "mid_peak": 0.146, "on_peak": 0.189}
 
@@ -121,3 +127,52 @@ def test_off_peak_rates_change_on_each_november_first():
     assert tou_rate_for_datetime(dt("2025-11-01T04:00:00"), RATES) == 0.098
     assert tou_rate_for_datetime(dt("2026-10-31T04:00:00"), RATES) == 0.098
     assert tou_rate_for_datetime(dt("2026-11-01T04:00:00"), RATES) == 0.091
+
+
+def test_tou_is_the_default_plan():
+    assert PRICING.DEFAULT_PRICING_PLAN == PLAN_TOU
+
+
+def test_ulo_periods_and_weekends():
+    rates = {"overnight": .037, "weekend_off_peak": .091, "mid_peak": .146, "on_peak": .377}
+    assert ulo_rate_for_datetime(dt("2026-11-02T12:00:00"), rates) == .146
+    assert ulo_rate_for_datetime(dt("2026-11-02T21:00:00"), rates) == .377
+    assert ulo_rate_for_datetime(dt("2026-11-02T04:00:00"), rates) == .037
+    assert ulo_rate_for_datetime(dt("2026-11-07T12:00:00"), rates) == .091
+
+
+def test_ulo_observed_holiday_is_weekend_off_peak_during_day():
+    rates = {"overnight": .037, "weekend_off_peak": .091, "mid_peak": .146, "on_peak": .377}
+    assert ulo_rate_for_datetime(dt("2026-12-28T12:00:00"), rates) == .091
+
+
+def test_residential_tiered_seasonal_thresholds():
+    assert tiered_threshold(date(2026, 1, 15)) == 1000
+    assert tiered_threshold(date(2026, 7, 15)) == 600
+    rates = {"tier1": .112, "tier2": .132}
+    assert tiered_rate_for_usage(
+        dt("2026-01-15T15:00:00"), 999, rates, rate_effective_date=date(2025, 11, 1)
+    ) == .112
+    assert tiered_rate_for_usage(
+        dt("2026-01-15T15:00:00"), 1000, rates, rate_effective_date=date(2025, 11, 1)
+    ) == .132
+    assert tiered_rate_for_usage(
+        dt("2026-07-15T15:00:00"), 600, rates, rate_effective_date=date(2025, 11, 1)
+    ) == .132
+
+
+def test_tiered_costs_apply_monthly_threshold_across_interval_energy():
+    readings = (IntervalReading(dt("2026-01-12T18:00:00"), 3600, 1001.0),)
+    rates = {"tier1": .112, "tier2": .132}
+    stats = build_cost_statistics(
+        readings, rates, rate_effective_date=date(2025, 11, 1),
+        pricing_plan=PLAN_TIERED
+    )
+    assert stats[-1]["sum"] == 112.132
+
+
+def test_ulo_costs_use_ulo_rate_schedule():
+    readings = (IntervalReading(dt("2026-11-02T21:00:00"), 3600, 2.0),)
+    rates = {"overnight": .037, "weekend_off_peak": .091, "mid_peak": .146, "on_peak": .377}
+    stats = build_cost_statistics(readings, rates, pricing_plan=PLAN_ULO)
+    assert stats[-1]["sum"] == .754

@@ -16,12 +16,21 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 
 from .const import (
     CONF_FILE_PATH,
+    CONF_PRICING_PLAN,
+    CONF_ULO_OVERNIGHT_RATE,
+    CONF_ULO_WEEKEND_RATE,
+    CONF_TIER1_RATE,
+    CONF_TIER2_RATE,
     CONF_MID_PEAK_RATE,
     CONF_OFF_PEAK_RATE,
     CONF_ON_PEAK_RATE,
     CONF_RATE_EFFECTIVE_DATE,
     DEFAULT_MID_PEAK_RATE,
     DEFAULT_OFF_PEAK_RATE,
+    DEFAULT_ULO_OVERNIGHT_RATE,
+    DEFAULT_ULO_WEEKEND_RATE,
+    DEFAULT_TIER1_RATE,
+    DEFAULT_TIER2_RATE,
     DEFAULT_ON_PEAK_RATE,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
@@ -33,7 +42,7 @@ from .green_button import (
     build_energy_statistics,
     parse_green_button_source,
 )
-from .pricing import DEFAULT_RATE_EFFECTIVE_DATE, build_cost_statistics
+from .pricing import DEFAULT_RATE_EFFECTIVE_DATE, DEFAULT_PRICING_PLAN, PLAN_TOU, PLAN_ULO, PLAN_TIERED, build_cost_statistics
 
 _LOGGER = logging.getLogger(__name__)
 ENERGY_STATISTIC_ID = f"{DOMAIN}:historical_energy"
@@ -48,11 +57,26 @@ _STATISTICS_MIGRATION_KEY = "historical_statistics_rebuilt_v1"
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up the integration from an XML file or a folder of exports."""
     source_path = entry.options.get(CONF_FILE_PATH, entry.data[CONF_FILE_PATH])
-    rates = {
-        "off_peak": float(entry.options.get(CONF_OFF_PEAK_RATE, DEFAULT_OFF_PEAK_RATE)),
-        "mid_peak": float(entry.options.get(CONF_MID_PEAK_RATE, DEFAULT_MID_PEAK_RATE)),
-        "on_peak": float(entry.options.get(CONF_ON_PEAK_RATE, DEFAULT_ON_PEAK_RATE)),
-    }
+    pricing_plan = entry.options.get(CONF_PRICING_PLAN, DEFAULT_PRICING_PLAN)
+    if pricing_plan == PLAN_ULO:
+        rates = {
+            "overnight": float(entry.options.get(CONF_ULO_OVERNIGHT_RATE, DEFAULT_ULO_OVERNIGHT_RATE)),
+            "weekend_off_peak": float(entry.options.get(CONF_ULO_WEEKEND_RATE, DEFAULT_ULO_WEEKEND_RATE)),
+            "mid_peak": float(entry.options.get(CONF_MID_PEAK_RATE, DEFAULT_MID_PEAK_RATE)),
+            "on_peak": float(entry.options.get(CONF_ON_PEAK_RATE, DEFAULT_ON_PEAK_RATE)),
+        }
+    elif pricing_plan == PLAN_TIERED:
+        rates = {
+            "tier1": float(entry.options.get(CONF_TIER1_RATE, DEFAULT_TIER1_RATE)),
+            "tier2": float(entry.options.get(CONF_TIER2_RATE, DEFAULT_TIER2_RATE)),
+        }
+    else:
+        pricing_plan = PLAN_TOU
+        rates = {
+            "off_peak": float(entry.options.get(CONF_OFF_PEAK_RATE, DEFAULT_OFF_PEAK_RATE)),
+            "mid_peak": float(entry.options.get(CONF_MID_PEAK_RATE, DEFAULT_MID_PEAK_RATE)),
+            "on_peak": float(entry.options.get(CONF_ON_PEAK_RATE, DEFAULT_ON_PEAK_RATE)),
+        }
     rate_effective_date = datetime.strptime(
         entry.options.get(
             CONF_RATE_EFFECTIVE_DATE, DEFAULT_RATE_EFFECTIVE_DATE.isoformat()
@@ -86,6 +110,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 rates,
                 time_zone,
                 rate_effective_date,
+                pricing_plan,
             )
 
             if not entry.data.get(_STATISTICS_MIGRATION_KEY):
