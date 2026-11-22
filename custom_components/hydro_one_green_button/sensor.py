@@ -1,7 +1,8 @@
 """Sensors for imported Hydro One Green Button data."""
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import UTC, date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorStateClass
 from homeassistant.config_entries import ConfigEntry
@@ -188,16 +189,19 @@ class HydroOneElectricityRateSensor(HydroOneSensorBase):
 
     @property
     def _current_month_usage(self) -> float:
-        now = dt_util.now().astimezone(__import__("zoneinfo").ZoneInfo(self._time_zone))
+        zone = ZoneInfo(self._time_zone)
+        now = dt_util.now().astimezone(zone)
+        month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0).astimezone(UTC)
+        now_utc = now.astimezone(UTC)
         total = 0.0
         for reading in self.coordinator.data.readings:
-            start = reading.start.astimezone(__import__("zoneinfo").ZoneInfo(self._time_zone))
-            end = start.timestamp() + reading.duration_seconds
-            if (start.year, start.month) == (now.year, now.month):
-                overlap_start = max(start.timestamp(), now.replace(day=1, hour=0, minute=0, second=0, microsecond=0).timestamp())
-                overlap_end = min(end, now.timestamp())
-                if overlap_end > overlap_start:
-                    total += reading.energy_kwh * (overlap_end - overlap_start) / reading.duration_seconds
+            start = reading.start.astimezone(UTC)
+            end = start + timedelta(seconds=reading.duration_seconds)
+            overlap_start = max(start, month_start)
+            overlap_end = min(end, now_utc)
+            if overlap_end > overlap_start:
+                seconds = (overlap_end - overlap_start).total_seconds()
+                total += reading.energy_kwh * seconds / reading.duration_seconds
         return total
 
     @property
