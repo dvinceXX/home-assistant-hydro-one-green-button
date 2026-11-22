@@ -5,9 +5,7 @@
       "user": {
         "title": "Import Hydro One Green Button XML",
         "description": "Enter the absolute path to a Green Button XML file or a folder containing XML exports, accessible to Home Assistant. Example: {example_path}. For automatic weekly imports, use a dedicated folder and drop each new .xml export into it.",
-        "data": {
-          "file_path": "XML file or folder path"
-        }
+        "data": {"file_path": "XML file or folder path"}
       }
     },
     "error": {
@@ -15,21 +13,24 @@
       "permission_denied": "Home Assistant does not have permission to read this path.",
       "invalid_file": "No supported Green Button XML usage data could be read from this file or folder."
     },
-    "abort": {
-      "already_configured": "This path is already configured."
-    }
+    "abort": {"already_configured": "This path is already configured."}
   },
   "options": {
     "step": {
       "init": {
-        "title": "Hydro One XML source and TOU rates",
-        "description": "Enter the XML file or folder and Ontario time-of-use rates in CAD/kWh. The selected rates are added to the effective-date schedule; bundled historical OEB rates remain in force for their listed periods.",
+        "title": "Hydro One XML source and electricity pricing",
+        "description": "Choose TOU, ULO or residential Tiered pricing. Rates are in CAD/kWh. The effective date applies to the configured rates; bundled OEB rates are used for earlier historical periods.",
         "data": {
           "file_path": "XML file or folder path",
-          "off_peak_rate": "Off-peak rate (CAD/kWh)",
-          "mid_peak_rate": "Mid-peak rate (CAD/kWh)",
-          "on_peak_rate": "On-peak rate (CAD/kWh)",
-          "rate_effective_date": "Effective date for these rates (YYYY-MM-DD)"
+          "pricing_plan": "Electricity pricing plan",
+          "off_peak_rate": "TOU off-peak rate (CAD/kWh)",
+          "mid_peak_rate": "TOU mid-peak rate (CAD/kWh)",
+          "on_peak_rate": "TOU on-peak rate (CAD/kWh)",
+          "ulo_overnight_rate": "ULO overnight rate (CAD/kWh)",
+          "ulo_weekend_rate": "ULO weekend off-peak rate (CAD/kWh)",
+          "tier1_rate": "Tiered Tier 1 rate (CAD/kWh)",
+          "tier2_rate": "Tiered Tier 2 rate (CAD/kWh)",
+          "rate_effective_date": "Effective date for configured rates (YYYY-MM-DD)"
         }
       }
     },
