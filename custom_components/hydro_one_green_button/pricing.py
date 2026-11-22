@@ -61,7 +61,7 @@ def _easter_sunday(year: int) -> date:
     d, e = divmod(b, 4)
     f = (b + 8) // 25
     g = (b - f + 1) // 3
-    h = (19 * a + b - d + 15) % 30
+    h = (19 * a + b - d - g + 15) % 30
     i, k = divmod(c, 4)
     l = (32 + 2 * e + 2 * i - h - k) % 7
     m = (a + 11 * h + 22 * l) // 451
@@ -73,13 +73,22 @@ def _easter_sunday(year: int) -> date:
 def ontario_tou_holidays(year: int) -> set[date]:
     """Ontario OEB TOU/ULO holidays, including Civic Holiday."""
     easter = _easter_sunday(year)
-    return {
+    holidays = {
         date(year, 1, 1), _nth_weekday(year, 2, 0, 3),
         easter - timedelta(days=2), _last_weekday(year, 5, 0),
         date(year, 7, 1), _nth_weekday(year, 8, 0, 1),
         _nth_weekday(year, 9, 0, 1), _nth_weekday(year, 10, 0, 2),
         date(year, 12, 25), date(year, 12, 26),
     }
+    # When a listed holiday falls on a weekend, the following Monday is
+    # observed for TOU/ULO holiday pricing.
+    observed = set(holidays)
+    for holiday in holidays:
+        if holiday.weekday() == 5:
+            observed.add(holiday + timedelta(days=2))
+        elif holiday.weekday() == 6:
+            observed.add(holiday + timedelta(days=1))
+    return observed
 
 
 def _scheduled_rates(local_date: date, schedule, configured: dict[str, float] | None,
@@ -211,3 +220,36 @@ def build_cost_statistics(readings, rates: dict[str, float] | None = None,
             hourly_costs[hour_start] += energy * rate_function(cursor, rates, time_zone, rate_effective_date)
             cursor = segment_end
     return _statistics_from_hourly_costs(hourly_costs)
+
+
+def tiered_rate_for_usage(
+    instant: datetime,
+    monthly_usage_kwh: float,
+    rates: dict[str, float] | None = None,
+    time_zone: str = "America/Toronto",
+    rate_effective_date: date = DEFAULT_RATE_EFFECTIVE_DATE,
+) -> float:
+    """Return the current marginal residential Tiered rate for month-to-date use."""
+    if instant.tzinfo is None:
+        raise ValueError("Pricing requires a timezone-aware datetime")
+    local_date = instant.astimezone(ZoneInfo(time_zone)).date()
+    prices = _tiered_prices(local_date, rates, rate_effective_date)
+    return float(prices["tier1"] if monthly_usage_kwh < tiered_threshold(local_date) else prices["tier2"])
+
+
+def rate_for_datetime(
+    instant: datetime,
+    pricing_plan: str,
+    rates: dict[str, float] | None = None,
+    time_zone: str = "America/Toronto",
+    rate_effective_date: date = DEFAULT_RATE_EFFECTIVE_DATE,
+    monthly_usage_kwh: float = 0.0,
+) -> float:
+    """Return the applicable scheduled or marginal rate for a selected plan."""
+    if pricing_plan == PLAN_ULO:
+        return ulo_rate_for_datetime(instant, rates, time_zone, rate_effective_date)
+    if pricing_plan == PLAN_TIERED:
+        return tiered_rate_for_usage(
+            instant, monthly_usage_kwh, rates, time_zone, rate_effective_date
+        )
+    return tou_rate_for_datetime(instant, rates, time_zone, rate_effective_date)
