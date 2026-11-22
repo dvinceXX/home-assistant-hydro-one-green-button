@@ -150,15 +150,24 @@ def test_residential_tiered_seasonal_thresholds():
     assert tiered_threshold(date(2026, 1, 15)) == 1000
     assert tiered_threshold(date(2026, 7, 15)) == 600
     rates = {"tier1": .112, "tier2": .132}
-    assert tiered_rate_for_usage(dt("2027-01-15T15:00:00"), 999, rates) == .112
-    assert tiered_rate_for_usage(dt("2027-01-15T15:00:00"), 1000, rates) == .132
-    assert tiered_rate_for_usage(dt("2027-07-15T15:00:00"), 600, rates) == .132
+    assert tiered_rate_for_usage(
+        dt("2026-01-15T15:00:00"), 999, rates, rate_effective_date=date(2025, 11, 1)
+    ) == .112
+    assert tiered_rate_for_usage(
+        dt("2026-01-15T15:00:00"), 1000, rates, rate_effective_date=date(2025, 11, 1)
+    ) == .132
+    assert tiered_rate_for_usage(
+        dt("2026-07-15T15:00:00"), 600, rates, rate_effective_date=date(2025, 11, 1)
+    ) == .132
 
 
 def test_tiered_costs_apply_monthly_threshold_across_interval_energy():
-    readings = (IntervalReading(dt("2026-11-02T18:00:00"), 3600, 1001.0),)
+    readings = (IntervalReading(dt("2026-01-12T18:00:00"), 3600, 1001.0),)
     rates = {"tier1": .112, "tier2": .132}
-    stats = build_cost_statistics(readings, rates, pricing_plan=PLAN_TIERED)
+    stats = build_cost_statistics(
+        readings, rates, rate_effective_date=date(2025, 11, 1),
+        pricing_plan=PLAN_TIERED
+    )
     assert stats[-1]["sum"] == 112.132
 
 
