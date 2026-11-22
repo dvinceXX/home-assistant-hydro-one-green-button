@@ -222,7 +222,7 @@ class HydroOneElectricityRateSensor(HydroOneSensorBase):
         if self._plan == PLAN_TIERED:
             attributes["month_to_date_usage_kwh"] = round(self._current_month_usage, 3)
             attributes["tier1_threshold_kwh"] = tiered_threshold(
-                dt_util.now().astimezone(__import__("zoneinfo").ZoneInfo(self._time_zone)).date()
+                dt_util.now().astimezone(ZoneInfo(self._time_zone)).date()
             )
         return attributes
 
